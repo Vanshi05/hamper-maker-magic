@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 30 20% 98%;
+    --foreground: 280 15% 20%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 280 15% 20%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 280 15% 20%;
+
+    --primary: 280 30% 35%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 30 30% 94%;
+    --secondary-foreground: 280 15% 20%;
+
+    --muted: 30 15% 92%;
+    --muted-foreground: 280 10% 45%;
+
+    --accent: 35 80% 55%;
+    --accent-foreground: 280 30% 15%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 20% 88%;
+    --input: 30 20% 88%;
+    --ring: 280 30% 35%;
+
+    --radius: 0.5rem;
+
+    /* Custom tokens for catalog */
+    --eco-green: 145 60% 35%;
+    --eco-green-light: 145 50% 92%;
+    --plum: 280 30% 35%;
+    --plum-light: 280 20% 95%;
+    --gold: 35 80% 55%;
+    --cream: 30 30% 97%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Catalog-specific styles */
+.catalog-page {
+  width: 1200px;
+  height: 630px;
+  background: white;
+}
+
+/* PDF pagination */
+.pdf-page {
+  width: 1200px;
+  height: 630px;
+  overflow: hidden;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+/* Backwards-compatible (kept) */
+.page-break {
+  page-break-after: always;
+  break-after: page;
+}
+
+.catalog-preview {
+  box-shadow: 0 25px 50px -12px hsl(280 30% 35% / 0.15);
+}
+
+/* Smooth transitions */
+.transition-smooth {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary) / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.5);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
