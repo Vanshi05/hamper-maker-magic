@@ -1,1 +1,13 @@
 project_id = "qlzgtbtqnwrgtlhrqdqd"
+
+[functions.hamper]
+verify_jwt = false
+
+[functions.invoice-list]
+verify_jwt = false
+
+[functions.invoicedata]
+verify_jwt = false
+
+[functions.invoicepdf]
+verify_jwt = false
