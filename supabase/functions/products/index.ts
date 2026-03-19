@@ -11,8 +11,8 @@ serve(async (req) => {
   }
 
   try {
-    const baseId = Deno.env.get("AIRTABLE_BASE_ID");
-    const apiKey = Deno.env.get("AIRTABLE_TOKEN");
+    const baseId = Deno.env.get("AIRTABLE_SALE_BASE_ID");
+    const apiKey = Deno.env.get("AIRTABLE_SALE_TOKEN");
 
     if (!baseId || !apiKey) {
       return new Response(
