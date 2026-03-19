@@ -50,6 +50,29 @@ const HamperDesigner = () => {
     setQtyOverrides(defaults);
   }, []);
 
+  const handleRegenerate = useCallback(async () => {
+    if (!questionnaire) return;
+    setIsRegenerating(true);
+    try {
+      const results = await generateHampersFromAirtable(questionnaire);
+      if (results.length === 0) {
+        toast({ title: "No hampers found", description: "No product combinations match your criteria.", variant: "destructive" });
+        return;
+      }
+      setHampers(results);
+      const first = results[0];
+      setSelected(first);
+      const defaults: Record<string, number> = {};
+      first.items.forEach((i) => (defaults[i.name] = i.qty));
+      setQtyOverrides(defaults);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to regenerate";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    } finally {
+      setIsRegenerating(false);
+    }
+  }, [questionnaire]);
+
   const adjustQty = useCallback((itemName: string, delta: number) => {
     setQtyOverrides((prev) => ({
       ...prev,
