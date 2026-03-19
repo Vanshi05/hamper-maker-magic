@@ -16,6 +16,7 @@ const HamperDesigner = () => {
   const [hampers, setHampers] = useState<GeneratedHamper[]>([]);
   const [selected, setSelected] = useState<GeneratedHamper | null>(null);
   const [qtyOverrides, setQtyOverrides] = useState<Record<string, number>>({});
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   const handleGenerate = useCallback(async (data: QuestionnaireData) => {
     setQuestionnaire(data);
@@ -48,6 +49,29 @@ const HamperDesigner = () => {
     h.items.forEach((i) => (defaults[i.name] = i.qty));
     setQtyOverrides(defaults);
   }, []);
+
+  const handleRegenerate = useCallback(async () => {
+    if (!questionnaire) return;
+    setIsRegenerating(true);
+    try {
+      const results = await generateHampersFromAirtable(questionnaire);
+      if (results.length === 0) {
+        toast({ title: "No hampers found", description: "No product combinations match your criteria.", variant: "destructive" });
+        return;
+      }
+      setHampers(results);
+      const first = results[0];
+      setSelected(first);
+      const defaults: Record<string, number> = {};
+      first.items.forEach((i) => (defaults[i.name] = i.qty));
+      setQtyOverrides(defaults);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to regenerate";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    } finally {
+      setIsRegenerating(false);
+    }
+  }, [questionnaire]);
 
   const adjustQty = useCallback((itemName: string, delta: number) => {
     setQtyOverrides((prev) => ({
@@ -132,7 +156,7 @@ const HamperDesigner = () => {
 
             {/* Right: Preview */}
             <aside className="lg:overflow-y-auto">
-              <HamperPreview hamper={selected} qtyOverrides={qtyOverrides} onAdjustQty={adjustQty} />
+              <HamperPreview hamper={selected} qtyOverrides={qtyOverrides} onAdjustQty={adjustQty} onRegenerate={handleRegenerate} isRegenerating={isRegenerating} />
             </aside>
           </div>
         )}

@@ -13,6 +13,8 @@ interface HamperPreviewProps {
   hamper: GeneratedHamper;
   qtyOverrides: Record<string, number>;
   onAdjustQty: (itemName: string, delta: number) => void;
+  onRegenerate?: () => void;
+  isRegenerating?: boolean;
 }
 
 const feasibilityMeta: Record<Feasibility, { label: string; color: string; bg: string }> = {
@@ -37,7 +39,7 @@ const inventoryStatusColor: Record<string, string> = {
   "Out of Stock": "text-destructive",
 };
 
-const HamperPreview = ({ hamper, qtyOverrides, onAdjustQty }: HamperPreviewProps) => {
+const HamperPreview = ({ hamper, qtyOverrides, onAdjustQty, onRegenerate, isRegenerating }: HamperPreviewProps) => {
   const pricing = React.useMemo(() => {
     let taxable = 0;
     hamper.items.forEach((i) => {
@@ -168,8 +170,8 @@ const HamperPreview = ({ hamper, qtyOverrides, onAdjustQty }: HamperPreviewProps
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button size="sm" className="gap-1 text-[11px] h-8" onClick={() => handleAction("Regenerating...")}>
-                <RotateCcw className="h-3.5 w-3.5" /> Regenerate
+              <Button size="sm" className="gap-1 text-[11px] h-8" onClick={onRegenerate} disabled={isRegenerating}>
+                <RotateCcw className={cn("h-3.5 w-3.5", isRegenerating && "animate-spin")} /> {isRegenerating ? "Generating…" : "Regenerate"}
               </Button>
             </TooltipTrigger>
             <TooltipContent>
