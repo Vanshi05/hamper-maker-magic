@@ -16,6 +16,7 @@ const HamperDesigner = () => {
   const [hampers, setHampers] = useState<GeneratedHamper[]>([]);
   const [selected, setSelected] = useState<GeneratedHamper | null>(null);
   const [qtyOverrides, setQtyOverrides] = useState<Record<string, number>>({});
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   const handleGenerate = useCallback(async (data: QuestionnaireData) => {
     setQuestionnaire(data);
