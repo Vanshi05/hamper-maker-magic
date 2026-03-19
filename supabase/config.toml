@@ -3,6 +3,9 @@ project_id = "qlzgtbtqnwrgtlhrqdqd"
 [functions.hamper]
 verify_jwt = false
 
+[functions.products]
+verify_jwt = false
+
 [functions.invoice-list]
 verify_jwt = false
 

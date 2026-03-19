@@ -1,31 +1,45 @@
 import { useState, useCallback, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import type { QuestionnaireData, GeneratedHamper } from "@/components/hamper/types";
-import { generateHampers } from "@/components/hamper/mockGenerator";
+import { generateHampersFromAirtable } from "@/components/hamper/airtableGenerator";
 import HamperWizard from "@/components/hamper/HamperWizard";
 import HamperCardList from "@/components/hamper/HamperCardList";
 import HamperPreview from "@/components/hamper/HamperPreview";
 import QuestionnaireRecap from "@/components/hamper/QuestionnaireRecap";
+import { toast } from "@/hooks/use-toast";
 
 const HamperDesigner = () => {
-  const [phase, setPhase] = useState<"wizard" | "results">("wizard");
+  const [phase, setPhase] = useState<"wizard" | "loading" | "results">("wizard");
   const [questionnaire, setQuestionnaire] = useState<QuestionnaireData | null>(null);
   const [hampers, setHampers] = useState<GeneratedHamper[]>([]);
   const [selected, setSelected] = useState<GeneratedHamper | null>(null);
   const [qtyOverrides, setQtyOverrides] = useState<Record<string, number>>({});
 
-  const handleGenerate = useCallback((data: QuestionnaireData) => {
+  const handleGenerate = useCallback(async (data: QuestionnaireData) => {
     setQuestionnaire(data);
-    const results = generateHampers(data);
-    setHampers(results);
-    const first = results[0];
-    setSelected(first);
-    const defaults: Record<string, number> = {};
-    first.items.forEach((i) => (defaults[i.name] = i.qty));
-    setQtyOverrides(defaults);
-    setPhase("results");
+    setPhase("loading");
+
+    try {
+      const results = await generateHampersFromAirtable(data);
+      if (results.length === 0) {
+        toast({ title: "No hampers found", description: "No product combinations match your criteria. Try adjusting budget or constraints.", variant: "destructive" });
+        setPhase("wizard");
+        return;
+      }
+      setHampers(results);
+      const first = results[0];
+      setSelected(first);
+      const defaults: Record<string, number> = {};
+      first.items.forEach((i) => (defaults[i.name] = i.qty));
+      setQtyOverrides(defaults);
+      setPhase("results");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to generate hampers";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+      setPhase("wizard");
+    }
   }, []);
 
   const handleSelect = useCallback((h: GeneratedHamper) => {
@@ -77,7 +91,7 @@ const HamperDesigner = () => {
             <div>
               <h1 className="text-base font-bold text-primary leading-tight">Hamper Designer</h1>
               <p className="text-[11px] text-muted-foreground">
-                {phase === "wizard" ? "Questionnaire" : "Generated Suggestions"}
+                {phase === "wizard" ? "Questionnaire" : phase === "loading" ? "Generating..." : "Generated Suggestions"}
               </p>
             </div>
           </div>
@@ -94,6 +108,13 @@ const HamperDesigner = () => {
         {phase === "wizard" && (
           <div className="flex items-start justify-center pt-6">
             <HamperWizard onGenerate={handleGenerate} />
+          </div>
+        )}
+
+        {phase === "loading" && (
+          <div className="flex flex-col items-center justify-center pt-24 gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Fetching products & generating hamper suggestions…</p>
           </div>
         )}
 
