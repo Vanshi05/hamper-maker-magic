@@ -39,7 +39,7 @@ const inventoryStatusColor: Record<string, string> = {
   "Out of Stock": "text-destructive",
 };
 
-const HamperPreview = ({ hamper, qtyOverrides, onAdjustQty }: HamperPreviewProps) => {
+const HamperPreview = ({ hamper, qtyOverrides, onAdjustQty, onRegenerate, isRegenerating }: HamperPreviewProps) => {
   const pricing = React.useMemo(() => {
     let taxable = 0;
     hamper.items.forEach((i) => {
