@@ -91,7 +91,7 @@ const HamperDesigner = () => {
             <div>
               <h1 className="text-base font-bold text-primary leading-tight">Hamper Designer</h1>
               <p className="text-[11px] text-muted-foreground">
-                {phase === "wizard" ? "Questionnaire" : "Generated Suggestions"}
+                {phase === "wizard" ? "Questionnaire" : phase === "loading" ? "Generating..." : "Generated Suggestions"}
               </p>
             </div>
           </div>
