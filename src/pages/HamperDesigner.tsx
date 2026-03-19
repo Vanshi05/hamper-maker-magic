@@ -111,6 +111,13 @@ const HamperDesigner = () => {
           </div>
         )}
 
+        {phase === "loading" && (
+          <div className="flex flex-col items-center justify-center pt-24 gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Fetching products & generating hamper suggestions…</p>
+          </div>
+        )}
+
         {phase === "results" && selected && questionnaire && (
           <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_320px] gap-3 h-[calc(100vh-56px)]">
             {/* Left: Recap */}
