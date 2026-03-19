@@ -5,9 +5,19 @@ import { PACKAGING_OPTIONS } from "./types";
 export interface AirtableProduct {
   p_id: string;
   fancy_name: string;
-  category: string;
-  product_type: string;
+  category: string | string[];
+  product_type: string | string[];
   product_tier: string;
+  pre_tax_db: number;
+  unsold_after_receivables: number;
+  image: string | null;
+}
+
+// Helper to normalize category to string
+function getCategory(p: AirtableProduct): string {
+  if (Array.isArray(p.category)) return p.category[0] || "";
+  return p.category || "";
+}
   pre_tax_db: number;
   unsold_after_receivables: number;
   image: string | null;
