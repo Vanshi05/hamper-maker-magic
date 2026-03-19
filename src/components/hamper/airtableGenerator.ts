@@ -213,16 +213,16 @@ export async function generateHampersFromAirtable(
 ): Promise<GeneratedHamper[]> {
   const allProducts = await fetchProducts();
 
-  // Step 2: Filter
+  // Step 2: Filter — normalize tier to lowercase for comparison
   const filtered = allProducts.filter(
-    (p) => p.product_tier !== "pending" && p.unsold_after_receivables >= data.quantity
+    (p) => p.product_tier.toLowerCase() !== "pending" && p.product_tier !== "" && p.unsold_after_receivables >= data.quantity
   );
 
   // Step 3: Split by tier
-  let heroes = filtered.filter((p) => p.product_tier === "hero");
-  let supporting = filtered.filter((p) => p.product_tier === "supporting");
-  let fillers = filtered.filter((p) => p.product_tier === "filler");
-  const packagingProducts = filtered.filter((p) => p.product_tier === "packaging");
+  let heroes = filtered.filter((p) => p.product_tier.toLowerCase() === "hero");
+  let supporting = filtered.filter((p) => p.product_tier.toLowerCase() === "supporting");
+  let fillers = filtered.filter((p) => p.product_tier.toLowerCase() === "filler");
+  const packagingProducts = filtered.filter((p) => p.product_tier.toLowerCase() === "packaging");
 
   // Step 5: Category filter
   const prefValue = data.heroPreference;
