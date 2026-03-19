@@ -13,6 +13,8 @@ interface HamperPreviewProps {
   hamper: GeneratedHamper;
   qtyOverrides: Record<string, number>;
   onAdjustQty: (itemName: string, delta: number) => void;
+  onRegenerate?: () => void;
+  isRegenerating?: boolean;
 }
 
 const feasibilityMeta: Record<Feasibility, { label: string; color: string; bg: string }> = {
