@@ -170,8 +170,8 @@ const HamperPreview = ({ hamper, qtyOverrides, onAdjustQty, onRegenerate, isRege
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button size="sm" className="gap-1 text-[11px] h-8" onClick={() => handleAction("Regenerating...")}>
-                <RotateCcw className="h-3.5 w-3.5" /> Regenerate
+              <Button size="sm" className="gap-1 text-[11px] h-8" onClick={onRegenerate} disabled={isRegenerating}>
+                <RotateCcw className={cn("h-3.5 w-3.5", isRegenerating && "animate-spin")} /> {isRegenerating ? "Generating…" : "Regenerate"}
               </Button>
             </TooltipTrigger>
             <TooltipContent>
