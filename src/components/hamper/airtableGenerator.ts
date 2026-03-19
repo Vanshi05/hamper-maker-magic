@@ -227,9 +227,11 @@ export async function generateHampersFromAirtable(
   // Step 5: Category filter
   const prefValue = data.heroPreference;
   if (prefValue && prefValue !== "no-preference" && prefValue !== "custom") {
-    const categoryFilter = (p: AirtableProduct) =>
-      p.category.toLowerCase().replace(/[\s&-]+/g, "-") === prefValue ||
-      p.category.toLowerCase().includes(prefValue.replace(/-/g, " "));
+    const categoryFilter = (p: AirtableProduct) => {
+      const cat = getCategory(p).toLowerCase();
+      return cat.replace(/[\s&-]+/g, "-") === prefValue ||
+        cat.includes(prefValue.replace(/-/g, " "));
+    };
 
     const filteredHeroes = heroes.filter(categoryFilter);
     const filteredSupporting = supporting.filter(categoryFilter);
