@@ -5,12 +5,18 @@ import { PACKAGING_OPTIONS } from "./types";
 export interface AirtableProduct {
   p_id: string;
   fancy_name: string;
-  category: string;
-  product_type: string;
+  category: string | string[];
+  product_type: string | string[];
   product_tier: string;
   pre_tax_db: number;
   unsold_after_receivables: number;
   image: string | null;
+}
+
+// Helper to normalize category to string
+function getCategory(p: AirtableProduct): string {
+  if (Array.isArray(p.category)) return p.category[0] || "";
+  return p.category || "";
 }
 
 // ── Fetch products from edge function ───────────────────────────────
@@ -207,23 +213,25 @@ export async function generateHampersFromAirtable(
 ): Promise<GeneratedHamper[]> {
   const allProducts = await fetchProducts();
 
-  // Step 2: Filter
+  // Step 2: Filter — normalize tier to lowercase for comparison
   const filtered = allProducts.filter(
-    (p) => p.product_tier !== "pending" && p.unsold_after_receivables >= data.quantity
+    (p) => p.product_tier.toLowerCase() !== "pending" && p.product_tier !== "" && p.unsold_after_receivables >= data.quantity
   );
 
   // Step 3: Split by tier
-  let heroes = filtered.filter((p) => p.product_tier === "hero");
-  let supporting = filtered.filter((p) => p.product_tier === "supporting");
-  let fillers = filtered.filter((p) => p.product_tier === "filler");
-  const packagingProducts = filtered.filter((p) => p.product_tier === "packaging");
+  let heroes = filtered.filter((p) => p.product_tier.toLowerCase() === "hero");
+  let supporting = filtered.filter((p) => p.product_tier.toLowerCase() === "supporting");
+  let fillers = filtered.filter((p) => p.product_tier.toLowerCase() === "filler");
+  const packagingProducts = filtered.filter((p) => p.product_tier.toLowerCase() === "packaging");
 
   // Step 5: Category filter
   const prefValue = data.heroPreference;
   if (prefValue && prefValue !== "no-preference" && prefValue !== "custom") {
-    const categoryFilter = (p: AirtableProduct) =>
-      p.category.toLowerCase().replace(/[\s&-]+/g, "-") === prefValue ||
-      p.category.toLowerCase().includes(prefValue.replace(/-/g, " "));
+    const categoryFilter = (p: AirtableProduct) => {
+      const cat = getCategory(p).toLowerCase();
+      return cat.replace(/[\s&-]+/g, "-") === prefValue ||
+        cat.includes(prefValue.replace(/-/g, " "));
+    };
 
     const filteredHeroes = heroes.filter(categoryFilter);
     const filteredSupporting = supporting.filter(categoryFilter);
