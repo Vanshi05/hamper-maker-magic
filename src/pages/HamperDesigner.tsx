@@ -156,7 +156,7 @@ const HamperDesigner = () => {
 
             {/* Right: Preview */}
             <aside className="lg:overflow-y-auto">
-              <HamperPreview hamper={selected} qtyOverrides={qtyOverrides} onAdjustQty={adjustQty} />
+              <HamperPreview hamper={selected} qtyOverrides={qtyOverrides} onAdjustQty={adjustQty} onRegenerate={handleRegenerate} isRegenerating={isRegenerating} />
             </aside>
           </div>
         )}
