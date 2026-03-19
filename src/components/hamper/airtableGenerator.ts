@@ -18,10 +18,6 @@ function getCategory(p: AirtableProduct): string {
   if (Array.isArray(p.category)) return p.category[0] || "";
   return p.category || "";
 }
-  pre_tax_db: number;
-  unsold_after_receivables: number;
-  image: string | null;
-}
 
 // ── Fetch products from edge function ───────────────────────────────
 export async function fetchProducts(): Promise<AirtableProduct[]> {
