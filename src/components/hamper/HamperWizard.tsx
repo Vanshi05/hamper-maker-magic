@@ -395,7 +395,8 @@ const HamperWizard = ({ onGenerate, products = [], isLoadingProducts }: HamperWi
                     : unselectedItems.slice(0, Math.max(0, MUST_HAVE_INITIAL_COUNT - selectedItems.length));
 
                   const visibleItems = [...selectedItems, ...visibleUnselected];
-                  const hasMore = !searchLower && unselectedItems.length > visibleUnselected.length;
+                  const totalHidden = unselectedItems.length - (mustHaveExpanded ? unselectedItems.length : Math.max(0, MUST_HAVE_INITIAL_COUNT - selectedItems.length));
+                  const showToggle = !searchLower && unselectedItems.length > Math.max(0, MUST_HAVE_INITIAL_COUNT - selectedItems.length);
 
                   return (
                     <div className="space-y-1.5">
