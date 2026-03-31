@@ -6,7 +6,7 @@ import type { QuestionnaireData, GeneratedHamper } from "@/components/hamper/typ
 import { generateHampersFromAirtable, fetchProducts } from "@/components/hamper/airtableGenerator";
 import type { AirtableProduct } from "@/components/hamper/airtableGenerator";
 import HamperWizard from "@/components/hamper/HamperWizard";
-import HamperCardList from "@/components/hamper/HamperCardList";
+import HamperCardList, { HamperCardSkeletons, HamperEmptyState } from "@/components/hamper/HamperCardList";
 import HamperPreview from "@/components/hamper/HamperPreview";
 import QuestionnaireRecap from "@/components/hamper/QuestionnaireRecap";
 import { toast } from "@/hooks/use-toast";
@@ -158,27 +158,44 @@ const HamperDesigner = () => {
         )}
 
         {phase === "loading" && (
-          <div className="flex flex-col items-center justify-center pt-24 gap-4">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Generating unique hamper suggestions…</p>
+          <div className="flex flex-col items-center justify-center pt-8 gap-6">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Generating unique hamper suggestions…</p>
+            </div>
+            <div className="w-full max-w-5xl">
+              <HamperCardSkeletons />
+            </div>
           </div>
         )}
 
         {phase === "results" && selected && questionnaire && (
-          <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_320px] gap-3 h-[calc(100vh-56px)]">
+          <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr_340px] gap-4 h-[calc(100vh-56px)]">
             {/* Left: Recap */}
             <aside className="lg:overflow-y-auto lg:pr-1 space-y-2">
               <QuestionnaireRecap data={questionnaire} onEdit={() => setPhase("wizard")} />
             </aside>
 
-            {/* Center: Cards */}
-            <section className="lg:overflow-y-auto lg:pr-1">
-              <HamperCardList hampers={hampers} selectedId={selected.id} onSelect={handleSelect} />
+            {/* Center: Card Grid */}
+            <section className="lg:overflow-y-auto lg:pr-1 pb-4">
+              <HamperCardList
+                hampers={hampers}
+                selectedId={selected.id}
+                onSelect={handleSelect}
+                onRegenerate={handleRegenerate}
+                isRegenerating={isRegenerating}
+              />
             </section>
 
-            {/* Right: Preview */}
+            {/* Right: Sticky Detail Preview */}
             <aside className="lg:overflow-y-auto">
-              <HamperPreview hamper={selected} qtyOverrides={qtyOverrides} onAdjustQty={adjustQty} onRegenerate={handleRegenerate} isRegenerating={isRegenerating} />
+              <HamperPreview
+                hamper={selected}
+                qtyOverrides={qtyOverrides}
+                onAdjustQty={adjustQty}
+                onRegenerate={handleRegenerate}
+                isRegenerating={isRegenerating}
+              />
             </aside>
           </div>
         )}
