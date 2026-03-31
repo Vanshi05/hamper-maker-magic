@@ -126,17 +126,13 @@ function shuffle<T>(arr: T[]): T[] {
 function selectWithinBudget(
   pool: AirtableProduct[],
   count: number,
-  budget: number,
-  sortDesc: boolean
+  budget: number
 ): AirtableProduct[] {
-  const sorted = [...pool].sort((a, b) =>
-    sortDesc ? b.pre_tax_db - a.pre_tax_db : a.pre_tax_db - b.pre_tax_db
-  );
-
+  // Pool is already shuffled — no deterministic sorting
   const selected: AirtableProduct[] = [];
   let spent = 0;
 
-  for (const item of sorted) {
+  for (const item of pool) {
     if (selected.length >= count) break;
     if (spent + item.pre_tax_db <= budget) {
       selected.push(item);
