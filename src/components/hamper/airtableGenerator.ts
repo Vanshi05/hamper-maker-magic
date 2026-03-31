@@ -21,25 +21,20 @@ function getCategory(p: AirtableProduct): string {
 
 // ── Fetch products from edge function ───────────────────────────────
 export async function fetchProducts(): Promise<AirtableProduct[]> {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const { supabase } = await import("@/integrations/supabase/client");
 
-  const url = `${supabaseUrl}/functions/v1/products`;
+  const { data, error } = await supabase.functions.invoke("products");
 
-  const response = await fetch(url, {
-    headers: {
-      apikey: anonKey,
-      Authorization: `Bearer ${anonKey}`,
-    },
-  });
-
-  const result = await response.json();
-
-  if (!result.success) {
-    throw new Error(result.error || "Failed to fetch products");
+  if (error) {
+    console.error("Edge function error:", error);
+    throw new Error(error.message || "Failed to fetch products");
   }
 
-  return result.data as AirtableProduct[];
+  if (!data?.success) {
+    throw new Error(data?.error || "Failed to fetch products");
+  }
+
+  return data.data as AirtableProduct[];
 }
 
 // ── Shuffle helper ──────────────────────────────────────────────────
