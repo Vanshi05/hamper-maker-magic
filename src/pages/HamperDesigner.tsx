@@ -18,6 +18,7 @@ const HamperDesigner = () => {
   const [selected, setSelected] = useState<GeneratedHamper | null>(null);
   const [qtyOverrides, setQtyOverrides] = useState<Record<string, number>>({});
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [compareIds, setCompareIds] = useState<string[]>([]);
 
   // Fetch products ONCE on mount
   const [products, setProducts] = useState<AirtableProduct[]>([]);
@@ -43,6 +44,7 @@ const HamperDesigner = () => {
 
   const applyHamperSelection = useCallback((results: GeneratedHamper[]) => {
     setHampers(results);
+    setCompareIds([]);
     const first = results[0];
     setSelected(first);
     const defaults: Record<string, number> = {};
@@ -57,7 +59,7 @@ const HamperDesigner = () => {
     try {
       const results = await generateHampersFromAirtable(data, products.length > 0 ? products : undefined);
       if (results.length === 0) {
-        toast({ title: "No hampers found", description: "No product combinations match your criteria. Try adjusting budget or constraints.", variant: "destructive" });
+        toast({ title: "No hampers found", description: "Couldn't find a perfect match — try adjusting filters.", variant: "destructive" });
         setPhase("wizard");
         return;
       }
@@ -77,13 +79,21 @@ const HamperDesigner = () => {
     setQtyOverrides(defaults);
   }, []);
 
+  const handleToggleCompare = useCallback((id: string) => {
+    setCompareIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= 2) return [prev[1], id]; // rotate
+      return [...prev, id];
+    });
+  }, []);
+
   const handleRegenerate = useCallback(async () => {
     if (!questionnaire) return;
     setIsRegenerating(true);
     try {
       const results = await generateHampersFromAirtable(questionnaire, products.length > 0 ? products : undefined);
       if (results.length === 0) {
-        toast({ title: "No hampers found", description: "No product combinations match your criteria.", variant: "destructive" });
+        toast({ title: "No hampers found", description: "Couldn't find a perfect match — try adjusting filters.", variant: "destructive" });
         return;
       }
       applyHamperSelection(results);
@@ -137,14 +147,16 @@ const HamperDesigner = () => {
             <div>
               <h1 className="text-base font-bold text-primary leading-tight">Hamper Designer</h1>
               <p className="text-[11px] text-muted-foreground">
-                {phase === "wizard" ? "Questionnaire" : phase === "loading" ? "Generating..." : "Generated Suggestions"}
+                {phase === "wizard" ? "Questionnaire" : phase === "loading" ? "Finding the best hampers…" : "Your Recommendations"}
               </p>
             </div>
           </div>
           {phase === "results" && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <kbd className="px-1.5 py-0.5 rounded border border-border bg-muted text-[10px]">↑↓</kbd>
-              <span>Navigate hampers</span>
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5">
+                <kbd className="px-1.5 py-0.5 rounded border border-border bg-muted text-[10px]">↑↓</kbd>
+                <span>Navigate</span>
+              </div>
             </div>
           )}
         </div>
@@ -161,7 +173,7 @@ const HamperDesigner = () => {
           <div className="flex flex-col items-center justify-center pt-8 gap-6">
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="text-sm text-muted-foreground">Generating unique hamper suggestions…</p>
+              <p className="text-sm text-muted-foreground">Finding the best combinations for you…</p>
             </div>
             <div className="w-full max-w-5xl">
               <HamperCardSkeletons />
@@ -171,7 +183,7 @@ const HamperDesigner = () => {
 
         {phase === "results" && selected && questionnaire && (
           <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr_340px] gap-4 h-[calc(100vh-56px)]">
-            {/* Left: Recap */}
+            {/* Left: Live Recap */}
             <aside className="lg:overflow-y-auto lg:pr-1 space-y-2">
               <QuestionnaireRecap data={questionnaire} onEdit={() => setPhase("wizard")} />
             </aside>
@@ -184,6 +196,9 @@ const HamperDesigner = () => {
                 onSelect={handleSelect}
                 onRegenerate={handleRegenerate}
                 isRegenerating={isRegenerating}
+                questionnaire={questionnaire}
+                compareIds={compareIds}
+                onToggleCompare={handleToggleCompare}
               />
             </section>
 
