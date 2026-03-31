@@ -356,19 +356,24 @@ export async function generateHampersFromAirtable(
   let fillers = filtered.filter((p) => p.product_tier.toLowerCase() === "filler");
   const packagingProducts = filtered.filter((p) => p.product_tier.toLowerCase() === "packaging");
 
-  // Category preference filter
+  // Category preference filter — applied BEFORE generation, after tier split
   const prefValue = data.heroPreference;
   if (prefValue && prefValue !== "no-preference" && prefValue !== "custom") {
+    // Convert slug back to search term: "food-&-beverage" → "food & beverage"
+    const prefSearch = prefValue.replace(/-/g, " ").toLowerCase();
+
     const categoryFilter = (p: AirtableProduct) => {
       const cat = getCategory(p).toLowerCase();
-      return cat.replace(/[\s&-]+/g, "-") === prefValue ||
-        cat.includes(prefValue.replace(/-/g, " "));
+      const pt = getProductType(p).toLowerCase();
+      return cat.includes(prefSearch) || prefSearch.includes(cat) ||
+        pt.includes(prefSearch) || prefSearch.includes(pt);
     };
 
     const filteredHeroes = heroes.filter(categoryFilter);
     const filteredSupporting = supporting.filter(categoryFilter);
     const filteredFillers = fillers.filter(categoryFilter);
 
+    // Apply if enough products remain; otherwise keep full pool
     if (filteredHeroes.length >= data.heroCount) heroes = filteredHeroes;
     if (filteredSupporting.length >= data.supportingCount) supporting = filteredSupporting;
     if (filteredFillers.length >= data.fillerCount) fillers = filteredFillers;
