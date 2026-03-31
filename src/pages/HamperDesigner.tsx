@@ -1,12 +1,13 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { QuestionnaireData, GeneratedHamper } from "@/components/hamper/types";
 import { generateHampersFromAirtable, fetchProducts } from "@/components/hamper/airtableGenerator";
 import type { AirtableProduct } from "@/components/hamper/airtableGenerator";
 import HamperWizard from "@/components/hamper/HamperWizard";
-import HamperCardList, { HamperCardSkeletons, HamperEmptyState } from "@/components/hamper/HamperCardList";
+import HamperCardList, { HamperCardSkeletons, HamperEmptyState, ComparisonPanel } from "@/components/hamper/HamperCardList";
 import HamperPreview from "@/components/hamper/HamperPreview";
 import QuestionnaireRecap from "@/components/hamper/QuestionnaireRecap";
 import { toast } from "@/hooks/use-toast";
@@ -20,25 +21,14 @@ const HamperDesigner = () => {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
 
-  // Fetch products ONCE on mount
   const [products, setProducts] = useState<AirtableProduct[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     fetchProducts()
-      .then((data) => {
-        if (!cancelled) {
-          setProducts(data);
-          setIsLoadingProducts(false);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          console.error("Failed to prefetch products:", err);
-          setIsLoadingProducts(false);
-        }
-      });
+      .then((data) => { if (!cancelled) { setProducts(data); setIsLoadingProducts(false); } })
+      .catch((err) => { if (!cancelled) { console.error("Failed to prefetch products:", err); setIsLoadingProducts(false); } });
     return () => { cancelled = true; };
   }, []);
 
@@ -55,7 +45,6 @@ const HamperDesigner = () => {
   const handleGenerate = useCallback(async (data: QuestionnaireData) => {
     setQuestionnaire(data);
     setPhase("loading");
-
     try {
       const results = await generateHampersFromAirtable(data, products.length > 0 ? products : undefined);
       if (results.length === 0) {
@@ -82,7 +71,7 @@ const HamperDesigner = () => {
   const handleToggleCompare = useCallback((id: string) => {
     setCompareIds((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id);
-      if (prev.length >= 2) return [prev[1], id]; // rotate
+      if (prev.length >= 2) return [prev[1], id];
       return [...prev, id];
     });
   }, []);
@@ -112,7 +101,12 @@ const HamperDesigner = () => {
     }));
   }, []);
 
-  // Keyboard nav for results
+  const compareHampers = useMemo(
+    () => hampers.filter((h) => compareIds.includes(h.id)),
+    [hampers, compareIds]
+  );
+
+  // Keyboard nav
   useEffect(() => {
     if (phase !== "results") return;
     const handler = (e: KeyboardEvent) => {
@@ -121,12 +115,10 @@ const HamperDesigner = () => {
       if (idx < 0) return;
       if (e.key === "ArrowDown" || e.key === "ArrowRight") {
         e.preventDefault();
-        const next = nonBackup[Math.min(idx + 1, nonBackup.length - 1)];
-        handleSelect(next);
+        handleSelect(nonBackup[Math.min(idx + 1, nonBackup.length - 1)]);
       } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
         e.preventDefault();
-        const prev = nonBackup[Math.max(idx - 1, 0)];
-        handleSelect(prev);
+        handleSelect(nonBackup[Math.max(idx - 1, 0)]);
       }
     };
     window.addEventListener("keydown", handler);
@@ -151,18 +143,30 @@ const HamperDesigner = () => {
               </p>
             </div>
           </div>
-          {phase === "results" && (
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1.5">
-                <kbd className="px-1.5 py-0.5 rounded border border-border bg-muted text-[10px]">↑↓</kbd>
-                <span>Navigate</span>
-              </div>
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            {phase === "results" && (
+              <>
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <kbd className="px-1.5 py-0.5 rounded border border-border bg-muted text-[10px]">↑↓</kbd>
+                  <span>Navigate</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-xs h-8"
+                  onClick={handleRegenerate}
+                  disabled={isRegenerating}
+                >
+                  <RefreshCw className={cn("h-3.5 w-3.5", isRegenerating && "animate-spin")} />
+                  {isRegenerating ? "Regenerating…" : "Regenerate Hampers"}
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
-      <main className="flex-1 max-w-[1920px] mx-auto px-3 py-3 w-full">
+      <main className="flex-1 max-w-[1920px] mx-auto px-4 py-4 w-full">
         {phase === "wizard" && (
           <div className="flex items-start justify-center pt-6">
             <HamperWizard onGenerate={handleGenerate} products={products} isLoadingProducts={isLoadingProducts} />
@@ -182,34 +186,41 @@ const HamperDesigner = () => {
         )}
 
         {phase === "results" && selected && questionnaire && (
-          <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr_340px] gap-4 h-[calc(100vh-56px)]">
-            {/* Left: Live Recap */}
-            <aside className="lg:overflow-y-auto lg:pr-1 space-y-2">
+          <div className="grid grid-cols-1 lg:grid-cols-[180px_1fr_360px] gap-5 h-[calc(100vh-60px)]">
+            {/* Left: Minimal Recap */}
+            <aside className="lg:overflow-y-auto space-y-3">
               <QuestionnaireRecap data={questionnaire} onEdit={() => setPhase("wizard")} />
             </aside>
 
             {/* Center: Card Grid */}
-            <section className="lg:overflow-y-auto lg:pr-1 pb-4">
+            <section className="lg:overflow-y-auto pb-4 space-y-5">
+              {/* Comparison panel */}
+              {compareIds.length === 2 && (
+                <ComparisonPanel
+                  hampers={compareHampers}
+                  q={questionnaire}
+                  onClear={() => setCompareIds([])}
+                />
+              )}
+
               <HamperCardList
                 hampers={hampers}
                 selectedId={selected.id}
                 onSelect={handleSelect}
-                onRegenerate={handleRegenerate}
-                isRegenerating={isRegenerating}
                 questionnaire={questionnaire}
                 compareIds={compareIds}
                 onToggleCompare={handleToggleCompare}
+                isRegenerating={isRegenerating}
               />
             </section>
 
-            {/* Right: Sticky Detail Preview */}
+            {/* Right: Full Detail Panel */}
             <aside className="lg:overflow-y-auto">
               <HamperPreview
                 hamper={selected}
                 qtyOverrides={qtyOverrides}
                 onAdjustQty={adjustQty}
-                onRegenerate={handleRegenerate}
-                isRegenerating={isRegenerating}
+                questionnaire={questionnaire}
               />
             </aside>
           </div>
