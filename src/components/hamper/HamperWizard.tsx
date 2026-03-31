@@ -381,20 +381,76 @@ const HamperWizard = ({ onGenerate, products = [], isLoadingProducts }: HamperWi
                   <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
                     <Loader2 className="h-3 w-3 animate-spin" /> Loading products…
                   </div>
-                ) : (
-                  <div className="flex gap-1.5 flex-wrap max-h-[120px] overflow-y-auto">
-                    {options.mustHaveOptions.map((item) => (
-                      <Badge
-                        key={item}
-                        variant={data.mustHaveItems.includes(item) ? "default" : "outline"}
-                        className="cursor-pointer text-[10px] px-2 py-0.5"
-                        onClick={() => toggleArrayItem("mustHaveItems", item)}
-                      >
-                        {item}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
+                ) : (() => {
+                  const searchLower = mustHaveSearch.toLowerCase();
+                  const filtered = searchLower
+                    ? options.mustHaveOptions.filter((item) => item.toLowerCase().includes(searchLower))
+                    : options.mustHaveOptions;
+
+                  const selectedItems = filtered.filter((item) => data.mustHaveItems.includes(item));
+                  const unselectedItems = filtered.filter((item) => !data.mustHaveItems.includes(item));
+
+                  const visibleUnselected = mustHaveExpanded || searchLower
+                    ? unselectedItems
+                    : unselectedItems.slice(0, Math.max(0, MUST_HAVE_INITIAL_COUNT - selectedItems.length));
+
+                  const visibleItems = [...selectedItems, ...visibleUnselected];
+                  const hasMore = !searchLower && unselectedItems.length > visibleUnselected.length;
+
+                  return (
+                    <div className="space-y-1.5">
+                      <div className="relative">
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                        <Input
+                          value={mustHaveSearch}
+                          onChange={(e) => setMustHaveSearch(e.target.value)}
+                          placeholder="Search products…"
+                          className="h-7 text-xs pl-7"
+                        />
+                      </div>
+                      <div className="flex gap-1.5 flex-wrap max-h-[200px] overflow-y-auto">
+                        {visibleItems.map((item) => (
+                          <Badge
+                            key={item}
+                            variant={data.mustHaveItems.includes(item) ? "default" : "outline"}
+                            className="cursor-pointer text-[10px] px-2 py-0.5"
+                            onClick={() => toggleArrayItem("mustHaveItems", item)}
+                          >
+                            {item}
+                          </Badge>
+                        ))}
+                        {filtered.length === 0 && (
+                          <p className="text-[10px] text-muted-foreground py-1">No matching products</p>
+                        )}
+                      </div>
+                      {hasMore && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-[10px] px-2 w-full"
+                          onClick={() => setMustHaveExpanded(!mustHaveExpanded)}
+                        >
+                          {mustHaveExpanded ? (
+                            <><ChevronUp className="h-3 w-3 mr-1" /> Show Less</>
+                          ) : (
+                            <><ChevronDown className="h-3 w-3 mr-1" /> Show More ({unselectedItems.length - visibleUnselected.length} more)</>
+                          )}
+                        </Button>
+                      )}
+                      {mustHaveExpanded && !searchLower && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-[10px] px-2 w-full"
+                          onClick={() => setMustHaveExpanded(false)}
+                        >
+                          <ChevronUp className="h-3 w-3 mr-1" /> Show Less
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Forbidden categories</Label>
