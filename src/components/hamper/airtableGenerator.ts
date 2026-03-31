@@ -25,22 +25,34 @@ function getProductType(p: AirtableProduct): string {
   return p.product_type || "";
 }
 
-// ── Fetch products from edge function ───────────────────────────────
-export async function fetchProducts(): Promise<AirtableProduct[]> {
-  const { supabase } = await import("@/integrations/supabase/client");
+// ── Fetch products from edge function (with retry for env loading) ──
+export async function fetchProducts(retries = 3, delayMs = 1000): Promise<AirtableProduct[]> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data, error } = await supabase.functions.invoke("products");
 
-  const { data, error } = await supabase.functions.invoke("products");
+      if (error) {
+        console.error("Edge function error:", error);
+        throw new Error(error.message || "Failed to fetch products");
+      }
 
-  if (error) {
-    console.error("Edge function error:", error);
-    throw new Error(error.message || "Failed to fetch products");
+      if (!data?.success) {
+        throw new Error(data?.error || "Failed to fetch products");
+      }
+
+      return data.data as AirtableProduct[];
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("supabaseUrl is required") && attempt < retries) {
+        console.warn(`Supabase not ready (attempt ${attempt}/${retries}), retrying in ${delayMs}ms...`);
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+      throw err;
+    }
   }
-
-  if (!data?.success) {
-    throw new Error(data?.error || "Failed to fetch products");
-  }
-
-  return data.data as AirtableProduct[];
+  throw new Error("Failed to fetch products after retries");
 }
 
 // ── Extract dynamic options from products ───────────────────────────
