@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import type { QuestionnaireData, GeneratedHamper } from "@/components/hamper/types";
-import { generateHampersFromAirtable } from "@/components/hamper/airtableGenerator";
+import { generateHampersFromAirtable, fetchProducts } from "@/components/hamper/airtableGenerator";
+import type { AirtableProduct } from "@/components/hamper/airtableGenerator";
 import HamperWizard from "@/components/hamper/HamperWizard";
 import HamperCardList from "@/components/hamper/HamperCardList";
 import HamperPreview from "@/components/hamper/HamperPreview";
@@ -18,30 +19,56 @@ const HamperDesigner = () => {
   const [qtyOverrides, setQtyOverrides] = useState<Record<string, number>>({});
   const [isRegenerating, setIsRegenerating] = useState(false);
 
+  // Fetch products ONCE on mount
+  const [products, setProducts] = useState<AirtableProduct[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchProducts()
+      .then((data) => {
+        if (!cancelled) {
+          setProducts(data);
+          setIsLoadingProducts(false);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("Failed to prefetch products:", err);
+          setIsLoadingProducts(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const applyHamperSelection = useCallback((results: GeneratedHamper[]) => {
+    setHampers(results);
+    const first = results[0];
+    setSelected(first);
+    const defaults: Record<string, number> = {};
+    first.items.forEach((i) => (defaults[i.name] = i.qty));
+    setQtyOverrides(defaults);
+  }, []);
+
   const handleGenerate = useCallback(async (data: QuestionnaireData) => {
     setQuestionnaire(data);
     setPhase("loading");
 
     try {
-      const results = await generateHampersFromAirtable(data);
+      const results = await generateHampersFromAirtable(data, products.length > 0 ? products : undefined);
       if (results.length === 0) {
         toast({ title: "No hampers found", description: "No product combinations match your criteria. Try adjusting budget or constraints.", variant: "destructive" });
         setPhase("wizard");
         return;
       }
-      setHampers(results);
-      const first = results[0];
-      setSelected(first);
-      const defaults: Record<string, number> = {};
-      first.items.forEach((i) => (defaults[i.name] = i.qty));
-      setQtyOverrides(defaults);
+      applyHamperSelection(results);
       setPhase("results");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to generate hampers";
       toast({ title: "Error", description: msg, variant: "destructive" });
       setPhase("wizard");
     }
-  }, []);
+  }, [products, applyHamperSelection]);
 
   const handleSelect = useCallback((h: GeneratedHamper) => {
     setSelected(h);
@@ -54,24 +81,19 @@ const HamperDesigner = () => {
     if (!questionnaire) return;
     setIsRegenerating(true);
     try {
-      const results = await generateHampersFromAirtable(questionnaire);
+      const results = await generateHampersFromAirtable(questionnaire, products.length > 0 ? products : undefined);
       if (results.length === 0) {
         toast({ title: "No hampers found", description: "No product combinations match your criteria.", variant: "destructive" });
         return;
       }
-      setHampers(results);
-      const first = results[0];
-      setSelected(first);
-      const defaults: Record<string, number> = {};
-      first.items.forEach((i) => (defaults[i.name] = i.qty));
-      setQtyOverrides(defaults);
+      applyHamperSelection(results);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to regenerate";
       toast({ title: "Error", description: msg, variant: "destructive" });
     } finally {
       setIsRegenerating(false);
     }
-  }, [questionnaire]);
+  }, [questionnaire, products, applyHamperSelection]);
 
   const adjustQty = useCallback((itemName: string, delta: number) => {
     setQtyOverrides((prev) => ({
@@ -131,14 +153,14 @@ const HamperDesigner = () => {
       <main className="flex-1 max-w-[1920px] mx-auto px-3 py-3 w-full">
         {phase === "wizard" && (
           <div className="flex items-start justify-center pt-6">
-            <HamperWizard onGenerate={handleGenerate} />
+            <HamperWizard onGenerate={handleGenerate} products={products} isLoadingProducts={isLoadingProducts} />
           </div>
         )}
 
         {phase === "loading" && (
           <div className="flex flex-col items-center justify-center pt-24 gap-4">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Fetching products & generating hamper suggestions…</p>
+            <p className="text-sm text-muted-foreground">Generating unique hamper suggestions…</p>
           </div>
         )}
 
