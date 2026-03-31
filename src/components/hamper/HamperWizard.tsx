@@ -91,6 +91,9 @@ const HamperWizard = ({ onGenerate, products = [], isLoadingProducts }: HamperWi
   const [step, setStep] = useState(0);
   const [data, setData] = useState<QuestionnaireData>({ ...DEFAULT_QUESTIONNAIRE });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [mustHaveSearch, setMustHaveSearch] = useState("");
+  const [mustHaveExpanded, setMustHaveExpanded] = useState(false);
+  const MUST_HAVE_INITIAL_COUNT = 12;
 
   // Dynamic options derived from products
   const dynamicOptions = useCallback(() => {
