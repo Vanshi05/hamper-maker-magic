@@ -219,9 +219,9 @@ function buildHamper(
   const supportingBudget = remainingBudget * (data.supportingBudgetPercent / 100);
   const fillerBudget = remainingBudget - heroBudget - supportingBudget;
 
-  const selectedHeroes = selectWithinBudget(heroes, data.heroCount, heroBudget, true);
-  const selectedSupporting = selectWithinBudget(supporting, data.supportingCount, supportingBudget, true);
-  const selectedFillers = selectWithinBudget(fillers, data.fillerCount, fillerBudget, false);
+  const selectedHeroes = selectWithinBudget(heroes, data.heroCount, heroBudget);
+  const selectedSupporting = selectWithinBudget(supporting, data.supportingCount, supportingBudget);
+  const selectedFillers = selectWithinBudget(fillers, data.fillerCount, fillerBudget);
 
   const allSelected = [...selectedHeroes, ...selectedSupporting, ...selectedFillers];
   if (allSelected.length === 0) return null;
