@@ -104,12 +104,6 @@ export interface GeneratedHamper {
 // ── Constants ────────────────────────────────────────────────────────
 export const HERO_OPTIONS = [
   { value: "no-preference", label: "No Preference" },
-  { value: "accessories", label: "Accessories" },
-  { value: "personal-care", label: "Personal Care" },
-  { value: "snacks", label: "Snacks" },
-  { value: "wellness", label: "Wellness" },
-  { value: "beverages", label: "Beverages" },
-  { value: "stationery", label: "Stationery" },
   { value: "custom", label: "Custom" },
 ];
 
@@ -118,24 +112,4 @@ export const PACKAGING_OPTIONS = [
   { value: "premium", label: "Premium Gift Box", cost: 250 },
   { value: "eco", label: "Eco-Friendly", cost: 180 },
   { value: "luxury", label: "Luxury Hamper Basket", cost: 400 },
-];
-
-export const CATEGORY_OPTIONS = [
-  "Chocolates & Sweets",
-  "Dry Fruits & Nuts",
-  "Wellness & Self-Care",
-  "Stationery & Desk",
-  "Beverages",
-  "Eco-Friendly",
-];
-
-export const MUST_HAVE_OPTIONS = [
-  "Artisan Chocolate",
-  "Premium Cashews",
-  "Green Tea",
-  "Scented Candle",
-  "Bamboo Tumbler",
-  "Honey Jar",
-  "Trail Mix",
-  "Masala Chai",
 ];
