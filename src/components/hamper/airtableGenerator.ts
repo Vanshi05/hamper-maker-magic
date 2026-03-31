@@ -19,6 +19,12 @@ function getCategory(p: AirtableProduct): string {
   return p.category || "";
 }
 
+// Helper to normalize product_type to string
+function getProductType(p: AirtableProduct): string {
+  if (Array.isArray(p.product_type)) return p.product_type[0] || "";
+  return p.product_type || "";
+}
+
 // ── Fetch products from edge function ───────────────────────────────
 export async function fetchProducts(): Promise<AirtableProduct[]> {
   const { supabase } = await import("@/integrations/supabase/client");
@@ -35,6 +41,63 @@ export async function fetchProducts(): Promise<AirtableProduct[]> {
   }
 
   return data.data as AirtableProduct[];
+}
+
+// ── Extract dynamic options from products ───────────────────────────
+export function extractDynamicOptions(products: AirtableProduct[]) {
+  const categoriesSet = new Set<string>();
+  const productTypesSet = new Set<string>();
+  const productNames: string[] = [];
+
+  for (const p of products) {
+    const cat = getCategory(p);
+    if (cat) categoriesSet.add(cat);
+
+    const pt = getProductType(p);
+    if (pt) productTypesSet.add(pt);
+
+    if (p.fancy_name) productNames.push(p.fancy_name);
+  }
+
+  const categories = Array.from(categoriesSet).sort();
+  const productTypes = Array.from(productTypesSet).sort();
+
+  // Must-have options = product names + product types (deduplicated)
+  const mustHaveOptions = Array.from(new Set([...productNames, ...productTypes])).sort();
+
+  // Hero preference options from categories
+  const heroOptions = [
+    { value: "no-preference", label: "No Preference" },
+    ...categories.map((c) => ({
+      value: c.toLowerCase().replace(/[\s&]+/g, "-"),
+      label: c,
+    })),
+    { value: "custom", label: "Custom" },
+  ];
+
+  return { categories, productTypes, productNames, mustHaveOptions, heroOptions };
+}
+
+// ── Dietary keyword map ─────────────────────────────────────────────
+const DIETARY_MAP: Record<string, string[]> = {
+  "no nuts": ["nuts", "almond", "cashew", "pistachio", "walnut", "peanut", "hazelnut"],
+  "vegan": ["milk", "honey", "chocolate", "dairy", "ghee", "butter", "cream"],
+  "no sugar": ["sugar", "sweet", "candy", "caramel", "toffee"],
+  "no gluten": ["wheat", "gluten", "bread", "cookie", "biscuit"],
+  "no dairy": ["milk", "dairy", "cheese", "cream", "butter", "ghee", "paneer"],
+};
+
+function getDietaryBlockedWords(dietaryNotes: string): string[] {
+  const input = dietaryNotes.toLowerCase().trim();
+  if (!input) return [];
+
+  const blocked: string[] = [];
+  for (const [key, words] of Object.entries(DIETARY_MAP)) {
+    if (input.includes(key)) {
+      blocked.push(...words);
+    }
+  }
+  return blocked;
 }
 
 // ── Shuffle helper ──────────────────────────────────────────────────
@@ -101,6 +164,38 @@ function computeInventory(items: AirtableProduct[], quantity: number): Inventory
   };
 }
 
+// ── Hamper signature for deduplication ───────────────────────────────
+function getHamperSignature(
+  heroes: AirtableProduct[],
+  supporting: AirtableProduct[],
+  fillers: AirtableProduct[]
+): string {
+  const ids = [
+    ...heroes.map((p) => p.p_id),
+    ...supporting.map((p) => p.p_id),
+    ...fillers.map((p) => p.p_id),
+  ];
+  ids.sort();
+  return ids.join("-");
+}
+
+// ── Must-have check ─────────────────────────────────────────────────
+function satisfiesMustHave(
+  selectedProducts: AirtableProduct[],
+  mustHaveList: string[]
+): boolean {
+  if (mustHaveList.length === 0) return true;
+
+  return mustHaveList.every((item) => {
+    const lower = item.toLowerCase();
+    return selectedProducts.some(
+      (p) =>
+        p.fancy_name.toLowerCase().includes(lower) ||
+        getProductType(p).toLowerCase().includes(lower)
+    );
+  });
+}
+
 // ── Build a single hamper ───────────────────────────────────────────
 function buildHamper(
   heroes: AirtableProduct[],
@@ -110,7 +205,7 @@ function buildHamper(
   data: QuestionnaireData,
   perHamperBudget: number,
   index: number
-): GeneratedHamper | null {
+): { hamper: GeneratedHamper; selectedProducts: AirtableProduct[]; signature: string } | null {
   const remainingBudget = perHamperBudget - data.packagingCost;
   const heroBudget = remainingBudget * (data.heroBudgetPercent / 100);
   const supportingBudget = remainingBudget * (data.supportingBudgetPercent / 100);
@@ -122,6 +217,12 @@ function buildHamper(
 
   const allSelected = [...selectedHeroes, ...selectedSupporting, ...selectedFillers];
   if (allSelected.length === 0) return null;
+
+  // Must-have enforcement
+  if (!satisfiesMustHave(allSelected, data.mustHaveItems)) return null;
+
+  // Signature for dedup
+  const signature = getHamperSignature(selectedHeroes, selectedSupporting, selectedFillers);
 
   const items: HamperItem[] = [
     ...selectedHeroes.map((p) => ({
@@ -177,49 +278,77 @@ function buildHamper(
   if (withinBudget) whyChosen.push("Within budget");
   if (selectedHeroes.length === data.heroCount) whyChosen.push("All hero slots filled");
   if (inventory.status === "Safe") whyChosen.push("Stock available");
+  if (data.mustHaveItems.length > 0) whyChosen.push("Must-have items included");
 
   const heroImage = selectedHeroes.find((h) => h.image)?.image;
   const anyImage = allSelected.find((p) => p.image)?.image;
   const fallbackImage = "https://images.unsplash.com/photo-1549465220-1a8b9238f0b0?w=400&h=300&fit=crop";
 
   return {
-    id: `gen-${index}`,
-    name: `Hamper Option ${index + 1}`,
-    heroProduct: selectedHeroes[0]?.fancy_name ?? "Custom Hamper",
-    sideItems: [
-      ...selectedSupporting.map((s) => s.fancy_name),
-      ...selectedFillers.map((f) => f.fancy_name),
-    ],
-    totalPrice,
-    image: heroImage || anyImage || fallbackImage,
-    badges,
-    items,
-    gstPercent: data.priorityMode === "premium" ? 18 : 12,
-    feasibility,
-    whyChosen,
-    isBackup: false,
-    inventory,
+    hamper: {
+      id: `gen-${index}`,
+      name: `Hamper Option ${index + 1}`,
+      heroProduct: selectedHeroes[0]?.fancy_name ?? "Custom Hamper",
+      sideItems: [
+        ...selectedSupporting.map((s) => s.fancy_name),
+        ...selectedFillers.map((f) => f.fancy_name),
+      ],
+      totalPrice,
+      image: heroImage || anyImage || fallbackImage,
+      badges,
+      items,
+      gstPercent: data.priorityMode === "premium" ? 18 : 12,
+      feasibility,
+      whyChosen,
+      isBackup: false,
+      inventory,
+    },
+    selectedProducts: allSelected,
+    signature,
   };
 }
 
 // ── Main generator ──────────────────────────────────────────────────
 export async function generateHampersFromAirtable(
-  data: QuestionnaireData
+  data: QuestionnaireData,
+  cachedProducts?: AirtableProduct[]
 ): Promise<GeneratedHamper[]> {
-  const allProducts = await fetchProducts();
+  const allProducts = cachedProducts || (await fetchProducts());
 
-  // Step 2: Filter — normalize tier to lowercase for comparison
-  const filtered = allProducts.filter(
-    (p) => p.product_tier.toLowerCase() !== "pending" && p.product_tier !== "" && p.unsold_after_receivables >= data.quantity
+  // Step 2: Base filter — exclude pending tiers, empty tiers
+  let filtered = allProducts.filter(
+    (p) => p.product_tier.toLowerCase() !== "pending" && p.product_tier !== ""
   );
 
-  // Step 3: Split by tier
+  // Step 3: Forbidden categories filter
+  if (data.forbiddenCategories.length > 0) {
+    const forbidden = data.forbiddenCategories.map((c) => c.toLowerCase());
+    filtered = filtered.filter((p) => {
+      const cat = getCategory(p).toLowerCase();
+      return !forbidden.some((f) => cat.includes(f) || f.includes(cat));
+    });
+  }
+
+  // Step 4: Dietary filter
+  const dietaryBlocked = getDietaryBlockedWords(data.dietaryNotes);
+  if (dietaryBlocked.length > 0) {
+    filtered = filtered.filter((p) =>
+      !dietaryBlocked.some((word) =>
+        p.fancy_name.toLowerCase().includes(word)
+      )
+    );
+  }
+
+  // Step 5: Inventory filter
+  filtered = filtered.filter((p) => p.unsold_after_receivables >= data.quantity);
+
+  // Step 6: Split by tier
   let heroes = filtered.filter((p) => p.product_tier.toLowerCase() === "hero");
   let supporting = filtered.filter((p) => p.product_tier.toLowerCase() === "supporting");
   let fillers = filtered.filter((p) => p.product_tier.toLowerCase() === "filler");
   const packagingProducts = filtered.filter((p) => p.product_tier.toLowerCase() === "packaging");
 
-  // Step 5: Category filter
+  // Category preference filter
   const prefValue = data.heroPreference;
   if (prefValue && prefValue !== "no-preference" && prefValue !== "custom") {
     const categoryFilter = (p: AirtableProduct) => {
@@ -232,69 +361,67 @@ export async function generateHampersFromAirtable(
     const filteredSupporting = supporting.filter(categoryFilter);
     const filteredFillers = fillers.filter(categoryFilter);
 
-    // Only apply if we have enough products after filtering
     if (filteredHeroes.length >= data.heroCount) heroes = filteredHeroes;
     if (filteredSupporting.length >= data.supportingCount) supporting = filteredSupporting;
     if (filteredFillers.length >= data.fillerCount) fillers = filteredFillers;
   }
 
-  // Step 6: Budget
+  // Budget
   const perHamperBudget =
     data.budgetMode === "total"
       ? Math.round(data.budget / Math.max(data.quantity, 1))
       : data.budget;
 
-  // Step 10: Packaging
+  // Packaging
   const selectedPackaging = selectPackaging(packagingProducts, data.packagingCost);
 
-  // Step 13: Generate 5 variations
+  // Step 9-10: Generate unique hampers with deduplication
+  const MAX_ATTEMPTS = 20;
+  const MAX_HAMPERS = 5;
+  const generatedSet = new Set<string>();
   const hampers: GeneratedHamper[] = [];
 
-  for (let i = 0; i < 5; i++) {
-    let heroPool = [...heroes];
-    let supportPool = shuffle(supporting);
-    let fillerPool = shuffle(fillers);
+  let attempts = 0;
+  while (attempts < MAX_ATTEMPTS && hampers.length < MAX_HAMPERS) {
+    // Vary pools each attempt
+    const heroPool = shuffle(heroes);
+    const supportPool = shuffle(supporting);
+    const fillerPool = shuffle(fillers);
 
-    // Variation strategies
-    if (i === 1 && heroPool.length > 1) {
-      heroPool = heroPool.slice(1); // Skip first hero
-    }
-    if (i === 2) {
-      heroPool = shuffle(heroPool);
-    }
-    if (i >= 3) {
-      heroPool = shuffle(heroPool);
-      supportPool = shuffle(supportPool);
-      fillerPool = shuffle(fillerPool);
-    }
-
-    const hamper = buildHamper(
+    const result = buildHamper(
       heroPool,
       supportPool,
       fillerPool,
       selectedPackaging,
       data,
       perHamperBudget,
-      i
+      hampers.length
     );
 
-    if (hamper) {
-      if (i >= 3) hamper.isBackup = true;
-      hampers.push(hamper);
+    if (result && !generatedSet.has(result.signature)) {
+      generatedSet.add(result.signature);
+      hampers.push(result.hamper);
     }
+
+    attempts++;
   }
 
-  // Sort: green first, then yellow, then red
+  // Sort: green first, then red
   hampers.sort((a, b) => {
     const order = { green: 0, yellow: 1, red: 2 };
     return order[a.feasibility] - order[b.feasibility];
   });
 
-  // Return top 3 as main + rest as backups
+  // Label: top 3 main, rest backup
   hampers.forEach((h, i) => {
-    if (i >= 3) h.isBackup = true;
     h.id = `gen-${i}`;
-    h.name = i < 3 ? `Hamper Option ${i + 1}` : `Backup ${i - 2}`;
+    if (i < 3) {
+      h.name = `Hamper Option ${i + 1}`;
+      h.isBackup = false;
+    } else {
+      h.name = `Backup ${i - 2}`;
+      h.isBackup = true;
+    }
   });
 
   return hampers;
