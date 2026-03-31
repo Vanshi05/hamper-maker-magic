@@ -451,7 +451,6 @@ const HamperWizard = ({ onGenerate, products = [], isLoadingProducts }: HamperWi
                   );
                 })()}
               </div>
-              </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Forbidden categories</Label>
                 <p className="text-[10px] text-muted-foreground">Selected categories will be excluded</p>
