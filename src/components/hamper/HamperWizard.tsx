@@ -25,6 +25,9 @@ import {
   Crown,
   Check,
   Loader2,
+  Search,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import {
   type QuestionnaireData,
