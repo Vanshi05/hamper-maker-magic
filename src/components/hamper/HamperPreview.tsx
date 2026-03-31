@@ -2,22 +2,27 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
-  Minus, Plus, RefreshCw, FileText, Save, Send, RotateCcw,
-  Shield, AlertTriangle, XCircle,
+  Minus, Plus, RefreshCw, FileText, Save, Send,
+  Shield, AlertTriangle, XCircle, Lightbulb,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import type { GeneratedHamper, Feasibility } from "./types";
+import type { GeneratedHamper, Feasibility, QuestionnaireData } from "./types";
+import {
+  budgetUtilization,
+  whyThisHamper,
+  smartWarnings,
+  confidenceScore,
+  hamperTypeLabel,
+} from "./hamperIntelligence";
 import React from "react";
 
 interface HamperPreviewProps {
   hamper: GeneratedHamper;
   qtyOverrides: Record<string, number>;
   onAdjustQty: (itemName: string, delta: number) => void;
-  onRegenerate?: () => void;
-  isRegenerating?: boolean;
+  questionnaire?: QuestionnaireData | null;
 }
 
 const feasibilityMeta: Record<Feasibility, { label: string; color: string; bg: string }> = {
@@ -35,9 +40,8 @@ const ROLE_LABELS: Record<string, string> = {
   filler: "Fillers",
   packaging: "Packaging",
 };
-
 const ROLE_BG: Record<string, string> = {
-  hero: "bg-primary/5 border border-primary/10 rounded-lg p-2",
+  hero: "bg-primary/5 border border-primary/10 rounded-lg p-2.5",
   supporting: "",
   filler: "",
   packaging: "",
@@ -54,7 +58,14 @@ const inventoryBadge = (status: string) => {
   }
 };
 
-const HamperPreview = ({ hamper, qtyOverrides, onAdjustQty, onRegenerate, isRegenerating }: HamperPreviewProps) => {
+const budgetBarColor = (pct: number) => {
+  if (pct >= 85 && pct <= 100) return "bg-[hsl(var(--eco-green))]";
+  if (pct >= 70) return "bg-primary";
+  if (pct > 100) return "bg-destructive";
+  return "bg-accent";
+};
+
+const HamperPreview = ({ hamper, qtyOverrides, onAdjustQty, questionnaire }: HamperPreviewProps) => {
   const pricing = React.useMemo(() => {
     let taxable = 0;
     hamper.items.forEach((i) => {
@@ -66,12 +77,17 @@ const HamperPreview = ({ hamper, qtyOverrides, onAdjustQty, onRegenerate, isRege
 
   const fMeta = feasibilityMeta[hamper.feasibility];
   const inv = inventoryBadge(hamper.inventory.status);
+  const q = questionnaire;
+  const bu = q ? budgetUtilization(hamper, q) : null;
+  const reasons = q ? whyThisHamper(hamper, q) : hamper.whyChosen;
+  const warns = q ? smartWarnings(hamper, q) : [];
+  const score = q ? confidenceScore(hamper, q) : null;
+  const typeLabel = q ? hamperTypeLabel(hamper, q) : null;
 
   const handleAction = (action: string) => {
     toast({ title: action, description: `${hamper.name} — ${fmt(pricing.grand)}` });
   };
 
-  // Group items by role
   const groupedItems = React.useMemo(() => {
     const groups: Record<string, typeof hamper.items> = {};
     for (const item of hamper.items) {
@@ -83,30 +99,53 @@ const HamperPreview = ({ hamper, qtyOverrides, onAdjustQty, onRegenerate, isRege
 
   return (
     <div className="flex flex-col gap-3 lg:sticky lg:top-[60px] lg:max-h-[calc(100vh-72px)] lg:overflow-y-auto">
-      {/* Header card with image */}
+      {/* Image + header */}
       <Card className="overflow-hidden">
-        <img src={hamper.image} alt={hamper.name} className="w-full h-44 object-cover" />
-        <CardContent className="p-3">
-          <div className="flex items-center justify-between mb-1">
-            <p className="font-bold text-base">{hamper.name}</p>
-            <div className={cn("flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full", fMeta.color, fMeta.bg)}>
+        <img src={hamper.image} alt={hamper.name} className="w-full h-48 object-cover" />
+        <CardContent className="p-4 space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="font-bold text-base">{hamper.name}</p>
+              {typeLabel && <span className="text-[10px] font-medium text-muted-foreground">{typeLabel}</span>}
+            </div>
+            <div className={cn("flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0", fMeta.color, fMeta.bg)}>
               {fMeta.label}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="outline" className={cn("text-[10px] gap-1", inv.cls)}>
-              {inv.icon} Stock: {inv.label}
+              {inv.icon} {inv.label}
             </Badge>
             <span className="text-[10px] text-muted-foreground">
               {hamper.inventory.stockAvailable} avail · {hamper.inventory.requiredQuantity} needed
             </span>
+            {score !== null && (
+              <Badge variant="outline" className="text-[10px] gap-1 font-bold">
+                Score: {score}/100
+              </Badge>
+            )}
           </div>
+          {/* Budget bar */}
+          {bu && bu.total > 0 && (
+            <div className="space-y-0.5 pt-1">
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground tabular-nums">
+                <span>{fmt(bu.used)} / {fmt(bu.total)}</span>
+                <span>{bu.pct}%</span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                <div
+                  className={cn("h-full rounded-full transition-all duration-500", budgetBarColor(bu.pct))}
+                  style={{ width: `${Math.min(bu.pct, 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Items grouped by role */}
+      {/* Product breakdown */}
       <Card>
-        <CardContent className="p-3 space-y-3">
+        <CardContent className="p-4 space-y-3">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Product Breakdown</p>
           {ROLE_ORDER.map((role) => {
             const items = groupedItems[role];
@@ -143,9 +182,42 @@ const HamperPreview = ({ hamper, qtyOverrides, onAdjustQty, onRegenerate, isRege
         </CardContent>
       </Card>
 
-      {/* Pricing summary */}
+      {/* Why this hamper + warnings */}
+      {(reasons.length > 0 || warns.length > 0) && (
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            {reasons.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                  <Lightbulb className="h-3 w-3" /> Why this hamper works
+                </p>
+                <ul className="space-y-1">
+                  {reasons.map((r, i) => (
+                    <li key={i} className="text-[11px] text-muted-foreground flex items-start gap-1.5">
+                      <span className="text-primary mt-0.5">•</span>
+                      <span>{r}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {warns.length > 0 && (
+              <div className="space-y-1">
+                {warns.map((w, i) => (
+                  <div key={i} className="flex items-start gap-1.5 text-[11px] text-accent-foreground bg-accent/10 rounded px-2.5 py-1.5">
+                    <AlertTriangle className="h-3 w-3 flex-shrink-0 mt-0.5" />
+                    <span>{w}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Pricing */}
       <Card className="border-primary/20">
-        <CardContent className="p-3 space-y-1.5 text-xs">
+        <CardContent className="p-4 space-y-1.5 text-xs">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Price Summary</p>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Subtotal</span>
@@ -163,29 +235,17 @@ const HamperPreview = ({ hamper, qtyOverrides, onAdjustQty, onRegenerate, isRege
         </CardContent>
       </Card>
 
-      {/* Action bar — sticky */}
-      <div className="grid grid-cols-2 gap-2 bg-background pt-1 pb-2 lg:sticky lg:bottom-0">
-        <Button variant="outline" size="sm" className="gap-1.5 text-xs h-9" onClick={() => handleAction("Preview PDF")}>
-          <FileText className="h-3.5 w-3.5" /> Preview PDF
+      {/* Actions */}
+      <div className="grid grid-cols-3 gap-2 bg-background pt-1 pb-2 lg:sticky lg:bottom-0">
+        <Button variant="outline" size="sm" className="gap-1 text-[11px] h-9" onClick={() => handleAction("Preview PDF")}>
+          <FileText className="h-3.5 w-3.5" /> PDF
         </Button>
-        <Button variant="outline" size="sm" className="gap-1.5 text-xs h-9" onClick={() => handleAction("Draft Saved")}>
-          <Save className="h-3.5 w-3.5" /> Save Draft
+        <Button variant="outline" size="sm" className="gap-1 text-[11px] h-9" onClick={() => handleAction("Draft Saved")}>
+          <Save className="h-3.5 w-3.5" /> Save
         </Button>
-        <Button variant="secondary" size="sm" className="gap-1.5 text-xs h-9" onClick={() => handleAction("Quote Sent")}>
-          <Send className="h-3.5 w-3.5" /> Send Quote
+        <Button variant="secondary" size="sm" className="gap-1 text-[11px] h-9" onClick={() => handleAction("Quote Sent")}>
+          <Send className="h-3.5 w-3.5" /> Quote
         </Button>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button size="sm" className="gap-1.5 text-xs h-9" onClick={onRegenerate} disabled={isRegenerating}>
-                <RotateCcw className={cn("h-3.5 w-3.5", isRegenerating && "animate-spin")} /> {isRegenerating ? "Generating…" : "Regenerate"}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p className="text-xs max-w-[200px]">Generates new hamper combinations using different products while keeping the same constraints.</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
       </div>
     </div>
   );
