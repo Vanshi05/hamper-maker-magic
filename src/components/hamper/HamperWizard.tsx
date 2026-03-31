@@ -424,7 +424,7 @@ const HamperWizard = ({ onGenerate, products = [], isLoadingProducts }: HamperWi
                           <p className="text-[10px] text-muted-foreground py-1">No matching products</p>
                         )}
                       </div>
-                      {hasMore && (
+                      {showToggle && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -434,18 +434,8 @@ const HamperWizard = ({ onGenerate, products = [], isLoadingProducts }: HamperWi
                           {mustHaveExpanded ? (
                             <><ChevronUp className="h-3 w-3 mr-1" /> Show Less</>
                           ) : (
-                            <><ChevronDown className="h-3 w-3 mr-1" /> Show More ({unselectedItems.length - visibleUnselected.length} more)</>
+                            <><ChevronDown className="h-3 w-3 mr-1" /> Show More ({totalHidden} more)</>
                           )}
-                        </Button>
-                      )}
-                      {mustHaveExpanded && !searchLower && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 text-[10px] px-2 w-full"
-                          onClick={() => setMustHaveExpanded(false)}
-                        >
-                          <ChevronUp className="h-3 w-3 mr-1" /> Show Less
                         </Button>
                       )}
                     </div>
