@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +24,7 @@ import {
   Zap,
   Crown,
   Check,
+  Loader2,
 } from "lucide-react";
 import {
   type QuestionnaireData,
@@ -31,12 +32,14 @@ import {
   HERO_OPTIONS,
   PACKAGING_OPTIONS,
   PACKAGING_COST_MAP,
-  CATEGORY_OPTIONS,
-  MUST_HAVE_OPTIONS,
 } from "./types";
+import type { AirtableProduct } from "./airtableGenerator";
+import { extractDynamicOptions } from "./airtableGenerator";
 
 interface HamperWizardProps {
   onGenerate: (data: QuestionnaireData) => void;
+  products?: AirtableProduct[];
+  isLoadingProducts?: boolean;
 }
 
 const STEPS = [
@@ -81,10 +84,26 @@ const INTENT_PRESETS: {
   },
 ];
 
-const HamperWizard = ({ onGenerate }: HamperWizardProps) => {
+const HamperWizard = ({ onGenerate, products = [], isLoadingProducts }: HamperWizardProps) => {
   const [step, setStep] = useState(0);
   const [data, setData] = useState<QuestionnaireData>({ ...DEFAULT_QUESTIONNAIRE });
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Dynamic options derived from products
+  const dynamicOptions = useCallback(() => {
+    if (products.length === 0) {
+      return {
+        categories: [] as string[],
+        productTypes: [] as string[],
+        productNames: [] as string[],
+        mustHaveOptions: [] as string[],
+        heroOptions: HERO_OPTIONS,
+      };
+    }
+    return extractDynamicOptions(products);
+  }, [products]);
+
+  const options = dynamicOptions();
 
   const update = useCallback(<K extends keyof QuestionnaireData>(key: K, value: QuestionnaireData[K]) => {
     setData((prev) => ({ ...prev, [key]: value }));
@@ -323,16 +342,22 @@ const HamperWizard = ({ onGenerate }: HamperWizardProps) => {
             <div className="space-y-3">
               <div className="space-y-1">
                 <Label className="text-xs">Preferred Product Category</Label>
-                <Select value={data.heroPreference} onValueChange={(v) => update("heroPreference", v)}>
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {HERO_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {isLoadingProducts ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Loading categories…
+                  </div>
+                ) : (
+                  <Select value={data.heroPreference} onValueChange={(v) => update("heroPreference", v)}>
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {options.heroOptions.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             </div>
           </div>
@@ -345,33 +370,47 @@ const HamperWizard = ({ onGenerate }: HamperWizardProps) => {
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Must-have items</Label>
-                <div className="flex gap-1.5 flex-wrap">
-                  {MUST_HAVE_OPTIONS.map((item) => (
-                    <Badge
-                      key={item}
-                      variant={data.mustHaveItems.includes(item) ? "default" : "outline"}
-                      className="cursor-pointer text-[10px] px-2 py-0.5"
-                      onClick={() => toggleArrayItem("mustHaveItems", item)}
-                    >
-                      {item}
-                    </Badge>
-                  ))}
-                </div>
+                <p className="text-[10px] text-muted-foreground">Selected items must appear in hamper</p>
+                {isLoadingProducts ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Loading products…
+                  </div>
+                ) : (
+                  <div className="flex gap-1.5 flex-wrap max-h-[120px] overflow-y-auto">
+                    {options.mustHaveOptions.map((item) => (
+                      <Badge
+                        key={item}
+                        variant={data.mustHaveItems.includes(item) ? "default" : "outline"}
+                        className="cursor-pointer text-[10px] px-2 py-0.5"
+                        onClick={() => toggleArrayItem("mustHaveItems", item)}
+                      >
+                        {item}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Forbidden categories</Label>
-                <div className="flex gap-1.5 flex-wrap">
-                  {CATEGORY_OPTIONS.map((cat) => (
-                    <Badge
-                      key={cat}
-                      variant={data.forbiddenCategories.includes(cat) ? "destructive" : "outline"}
-                      className="cursor-pointer text-[10px] px-2 py-0.5"
-                      onClick={() => toggleArrayItem("forbiddenCategories", cat)}
-                    >
-                      {cat}
-                    </Badge>
-                  ))}
-                </div>
+                <p className="text-[10px] text-muted-foreground">Selected categories will be excluded</p>
+                {isLoadingProducts ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Loading categories…
+                  </div>
+                ) : (
+                  <div className="flex gap-1.5 flex-wrap">
+                    {options.categories.map((cat) => (
+                      <Badge
+                        key={cat}
+                        variant={data.forbiddenCategories.includes(cat) ? "destructive" : "outline"}
+                        className="cursor-pointer text-[10px] px-2 py-0.5"
+                        onClick={() => toggleArrayItem("forbiddenCategories", cat)}
+                      >
+                        {cat}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Dietary notes</Label>
@@ -381,6 +420,7 @@ const HamperWizard = ({ onGenerate }: HamperWizardProps) => {
                   placeholder="e.g. No nuts, vegan only"
                   className="h-8 text-sm"
                 />
+                <p className="text-[10px] text-muted-foreground">Supports: no nuts, vegan, no sugar, no gluten, no dairy</p>
               </div>
 
               {/* Hamper Structure */}
