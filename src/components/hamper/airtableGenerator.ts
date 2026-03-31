@@ -126,17 +126,13 @@ function shuffle<T>(arr: T[]): T[] {
 function selectWithinBudget(
   pool: AirtableProduct[],
   count: number,
-  budget: number,
-  sortDesc: boolean
+  budget: number
 ): AirtableProduct[] {
-  const sorted = [...pool].sort((a, b) =>
-    sortDesc ? b.pre_tax_db - a.pre_tax_db : a.pre_tax_db - b.pre_tax_db
-  );
-
+  // Pool is already shuffled — no deterministic sorting
   const selected: AirtableProduct[] = [];
   let spent = 0;
 
-  for (const item of sorted) {
+  for (const item of pool) {
     if (selected.length >= count) break;
     if (spent + item.pre_tax_db <= budget) {
       selected.push(item);
@@ -223,9 +219,9 @@ function buildHamper(
   const supportingBudget = remainingBudget * (data.supportingBudgetPercent / 100);
   const fillerBudget = remainingBudget - heroBudget - supportingBudget;
 
-  const selectedHeroes = selectWithinBudget(heroes, data.heroCount, heroBudget, true);
-  const selectedSupporting = selectWithinBudget(supporting, data.supportingCount, supportingBudget, true);
-  const selectedFillers = selectWithinBudget(fillers, data.fillerCount, fillerBudget, false);
+  const selectedHeroes = selectWithinBudget(heroes, data.heroCount, heroBudget);
+  const selectedSupporting = selectWithinBudget(supporting, data.supportingCount, supportingBudget);
+  const selectedFillers = selectWithinBudget(fillers, data.fillerCount, fillerBudget);
 
   const allSelected = [...selectedHeroes, ...selectedSupporting, ...selectedFillers];
   if (allSelected.length === 0) return null;
@@ -360,19 +356,24 @@ export async function generateHampersFromAirtable(
   let fillers = filtered.filter((p) => p.product_tier.toLowerCase() === "filler");
   const packagingProducts = filtered.filter((p) => p.product_tier.toLowerCase() === "packaging");
 
-  // Category preference filter
+  // Category preference filter — applied BEFORE generation, after tier split
   const prefValue = data.heroPreference;
   if (prefValue && prefValue !== "no-preference" && prefValue !== "custom") {
+    // Convert slug back to search term: "food-&-beverage" → "food & beverage"
+    const prefSearch = prefValue.replace(/-/g, " ").toLowerCase();
+
     const categoryFilter = (p: AirtableProduct) => {
       const cat = getCategory(p).toLowerCase();
-      return cat.replace(/[\s&-]+/g, "-") === prefValue ||
-        cat.includes(prefValue.replace(/-/g, " "));
+      const pt = getProductType(p).toLowerCase();
+      return cat.includes(prefSearch) || prefSearch.includes(cat) ||
+        pt.includes(prefSearch) || prefSearch.includes(pt);
     };
 
     const filteredHeroes = heroes.filter(categoryFilter);
     const filteredSupporting = supporting.filter(categoryFilter);
     const filteredFillers = fillers.filter(categoryFilter);
 
+    // Apply if enough products remain; otherwise keep full pool
     if (filteredHeroes.length >= data.heroCount) heroes = filteredHeroes;
     if (filteredSupporting.length >= data.supportingCount) supporting = filteredSupporting;
     if (filteredFillers.length >= data.fillerCount) fillers = filteredFillers;
