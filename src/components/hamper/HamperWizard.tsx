@@ -308,7 +308,7 @@ const HamperWizard = ({ onGenerate, products = [], isLoadingProducts }: HamperWi
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={data.deliveryDate} onSelect={(d) => update("deliveryDate", d)} className="p-2 pointer-events-auto" />
+                      <Calendar mode="single" selected={data.deliveryDate} onSelect={(d) => update("deliveryDate", d)} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} className="p-2 pointer-events-auto" />
                     </PopoverContent>
                   </Popover>
                   {errors.deliveryDate && <p className="text-[10px] text-destructive">{errors.deliveryDate}</p>}
