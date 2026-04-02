@@ -1,5 +1,6 @@
 import type { QuestionnaireData, GeneratedHamper, HamperItem, Feasibility, BadgeType, InventoryStatus } from "./types";
 import { PACKAGING_OPTIONS } from "./types";
+import { supabase } from "@/integrations/supabase/client";
 
 // ── Airtable Product shape ──────────────────────────────────────────
 export interface AirtableProduct {
@@ -27,27 +28,13 @@ function getProductType(p: AirtableProduct): string {
 
 // ── Fetch products from edge function ──
 export async function fetchProducts(): Promise<AirtableProduct[]> {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-  if (!supabaseUrl || !anonKey) {
-    throw new Error("Supabase environment variables are not configured. Check VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.");
-  }
-
-  const response = await fetch(`${supabaseUrl}/functions/v1/products`, {
+  const { data, error } = await supabase.functions.invoke("products", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: anonKey,
-      Authorization: `Bearer ${anonKey}`,
-    },
   });
 
-  if (!response.ok) {
-    throw new Error(`Edge function returned ${response.status}: ${await response.text()}`);
+  if (error) {
+    throw new Error(`Edge function error: ${error.message}`);
   }
-
-  const data = await response.json();
 
   if (!data?.success) {
     throw new Error(data?.error || "Failed to fetch products");
