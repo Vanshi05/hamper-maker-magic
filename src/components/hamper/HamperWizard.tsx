@@ -39,6 +39,65 @@ import {
 } from "./types";
 import type { AirtableProduct } from "./airtableGenerator";
 import { extractDynamicOptions } from "./airtableGenerator";
+import { memo, useRef, useEffect } from "react";
+
+/* ── Must-Have Product List (stable component to preserve input focus) ── */
+const MustHaveProductList = memo(function MustHaveProductList({
+  options, selected, search, onSearchChange, onToggle, expanded, onToggleExpand, initialCount,
+}: {
+  options: string[]; selected: string[]; search: string; onSearchChange: (v: string) => void;
+  onToggle: (item: string) => void; expanded: boolean; onToggleExpand: () => void; initialCount: number;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const searchLower = search.toLowerCase();
+  const filtered = searchLower
+    ? options.filter((item) => item.toLowerCase().includes(searchLower))
+    : options;
+  const unselectedFiltered = filtered.filter((item) => !selected.includes(item));
+  const visibleUnselected = expanded || searchLower ? unselectedFiltered : unselectedFiltered.slice(0, initialCount);
+  const totalHidden = unselectedFiltered.length - visibleUnselected.length;
+  const showToggle = !searchLower && totalHidden > 0;
+
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <Input
+          ref={inputRef}
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Search products..."
+          className="h-8 text-xs pl-8"
+        />
+      </div>
+      <div className="flex gap-1.5 flex-wrap max-h-[250px] overflow-y-auto py-0.5">
+        {visibleUnselected.map((item) => (
+          <Badge
+            key={item}
+            variant="outline"
+            className="cursor-pointer text-[10px] px-2.5 py-1 rounded-full hover:bg-primary/10 hover:border-primary/30 transition-colors"
+            onClick={() => onToggle(item)}
+          >
+            {item}
+          </Badge>
+        ))}
+        {filtered.length === 0 && (
+          <p className="text-[10px] text-muted-foreground py-1">No matching products</p>
+        )}
+      </div>
+      {showToggle && (
+        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 w-full text-muted-foreground" onClick={onToggleExpand}>
+          {expanded ? (
+            <><ChevronUp className="h-3 w-3 mr-1" /> Show Less</>
+          ) : (
+            <><ChevronDown className="h-3 w-3 mr-1" /> Show More ({totalHidden} more)</>
+          )}
+        </Button>
+      )}
+    </div>
+  );
+});
 
 interface HamperWizardProps {
   onGenerate: (data: QuestionnaireData) => void;
