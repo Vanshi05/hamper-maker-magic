@@ -373,59 +373,18 @@ const HamperWizard = ({ onGenerate, products = [], isLoadingProducts }: HamperWi
 
               {isLoadingProducts ? (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground py-2"><Loader2 className="h-3 w-3 animate-spin" /> Loading products…</div>
-              ) : (() => {
-                const searchLower = mustHaveSearch.toLowerCase();
-                const filtered = searchLower
-                  ? options.mustHaveOptions.filter((item) => item.toLowerCase().includes(searchLower))
-                  : options.mustHaveOptions;
-
-                const unselectedFiltered = filtered.filter((item) => !data.mustHaveItems.includes(item));
-
-                const visibleUnselected = mustHaveExpanded || searchLower
-                  ? unselectedFiltered
-                  : unselectedFiltered.slice(0, MUST_HAVE_INITIAL_COUNT);
-
-                const totalHidden = unselectedFiltered.length - visibleUnselected.length;
-                const showToggle = !searchLower && totalHidden > 0;
-
-                return (
-                  <div className="space-y-2">
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                      <Input
-                        value={mustHaveSearch}
-                        onChange={(e) => setMustHaveSearch(e.target.value)}
-                        placeholder="Search products..."
-                        className="h-8 text-xs pl-8"
-                      />
-                    </div>
-                    <div className="flex gap-1.5 flex-wrap max-h-[250px] overflow-y-auto py-0.5">
-                      {visibleUnselected.map((item) => (
-                        <Badge
-                          key={item}
-                          variant="outline"
-                          className="cursor-pointer text-[10px] px-2.5 py-1 rounded-full hover:bg-primary/10 hover:border-primary/30 transition-colors"
-                          onClick={() => toggleArrayItem("mustHaveItems", item)}
-                        >
-                          {item}
-                        </Badge>
-                      ))}
-                      {filtered.length === 0 && (
-                        <p className="text-[10px] text-muted-foreground py-1">No matching products</p>
-                      )}
-                    </div>
-                    {showToggle && (
-                      <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 w-full text-muted-foreground" onClick={() => setMustHaveExpanded(!mustHaveExpanded)}>
-                        {mustHaveExpanded ? (
-                          <><ChevronUp className="h-3 w-3 mr-1" /> Show Less</>
-                        ) : (
-                          <><ChevronDown className="h-3 w-3 mr-1" /> Show More ({totalHidden} more)</>
-                        )}
-                      </Button>
-                    )}
-                  </div>
-                );
-              })()}
+              ) : (
+                <MustHaveProductList
+                  options={options.mustHaveOptions}
+                  selected={data.mustHaveItems}
+                  search={mustHaveSearch}
+                  onSearchChange={setMustHaveSearch}
+                  onToggle={(item) => toggleArrayItem("mustHaveItems", item)}
+                  expanded={mustHaveExpanded}
+                  onToggleExpand={() => setMustHaveExpanded(!mustHaveExpanded)}
+                  initialCount={MUST_HAVE_INITIAL_COUNT}
+                />
+              )}
             </SectionCard>
 
             {/* ── Block 2: Exclusions ── */}
