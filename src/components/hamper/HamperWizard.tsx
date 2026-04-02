@@ -122,6 +122,12 @@ const DIETARY_PRESETS = [
   { label: "No Dairy", keyword: "no dairy" },
 ];
 
+const SectionCard = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+  <div className={cn("rounded-lg border border-border/60 bg-muted/20 p-4 space-y-3", className)}>
+    {children}
+  </div>
+);
+
 const INTENT_PRESETS: {
   value: QuestionnaireData["priorityMode"];
   label: string;
@@ -224,13 +230,6 @@ const HamperWizard = ({ onGenerate, products = [], isLoadingProducts }: HamperWi
   const intentLabel = INTENT_PRESETS.find((p) => p.value === data.priorityMode)?.label ?? data.priorityMode;
   const packagingLabel = PACKAGING_OPTIONS.find((p) => p.value === data.packagingType)?.label ?? data.packagingType;
   const categoryLabel = options.heroOptions.find((o) => o.value === data.heroPreference)?.label ?? data.heroPreference;
-
-  // Section card wrapper for step 2
-  const SectionCard = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-    <div className={cn("rounded-lg border border-border/60 bg-muted/20 p-4 space-y-3", className)}>
-      {children}
-    </div>
-  );
 
   return (
     <div className="max-w-2xl mx-auto w-full">
