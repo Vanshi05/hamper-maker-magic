@@ -308,24 +308,9 @@ export default function HamperPdfDialog({
       try {
         const doc = generatePdf(hamper, qtyOverrides, questionnaire);
         pdfRef.current = doc;
-
-        // Convert each page to an image using jsPDF's internal canvas
-        const totalPages = doc.getNumberOfPages();
-        const images: string[] = [];
-        for (let i = 1; i <= totalPages; i++) {
-          doc.setPage(i);
-          // Use output as data URI for each page by creating a single-page doc
-          const singlePage = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-          const pageData = doc.output("arraybuffer");
-          // Instead, render the full PDF as images using the canvas approach
-          // jsPDF doesn't natively support per-page image export, so we use the data URI
-          images.push(""); // placeholder
-        }
-
-        // Use a simpler approach: render the PDF as a single data URI
         const dataUri = doc.output("datauristring");
         setPageImages([dataUri]);
-        
+
       } catch (err) {
         console.error("PDF generation failed:", err);
       } finally {
