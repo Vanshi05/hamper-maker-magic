@@ -67,6 +67,7 @@ const budgetBarColor = (pct: number) => {
 };
 
 const HamperPreview = ({ hamper, qtyOverrides, onAdjustQty, questionnaire }: HamperPreviewProps) => {
+  const [pdfOpen, setPdfOpen] = useState(false);
   const pricing = React.useMemo(() => {
     let taxable = 0;
     hamper.items.forEach((i) => {
