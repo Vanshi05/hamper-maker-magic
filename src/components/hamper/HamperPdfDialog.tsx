@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useCallback, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Loader2, X } from "lucide-react";
+import { Download, X, Lightbulb } from "lucide-react";
 import jsPDF from "jspdf";
 import type { GeneratedHamper, QuestionnaireData } from "./types";
 import { budgetUtilization, whyThisHamper, confidenceScore, hamperTypeLabel } from "./hamperIntelligence";
@@ -289,6 +289,152 @@ function generatePdf(
   return doc;
 }
 
+/* ── HTML Preview Component ── */
+function ProposalPreview({
+  hamper,
+  qtyOverrides,
+  questionnaire,
+}: {
+  hamper: GeneratedHamper;
+  qtyOverrides: Record<string, number>;
+  questionnaire: QuestionnaireData;
+}) {
+  const bu = budgetUtilization(hamper, questionnaire);
+  const typeLabel = hamperTypeLabel(hamper, questionnaire);
+  const score = confidenceScore(hamper, questionnaire);
+  const reasons = whyThisHamper(hamper, questionnaire);
+
+  const pricing = useMemo(() => {
+    let subtotal = 0;
+    hamper.items.forEach((i) => {
+      subtotal += i.unitPrice * (qtyOverrides[i.name] ?? i.qty);
+    });
+    const tax = Math.round(subtotal * (hamper.gstPercent / 100));
+    return { subtotal, tax, grand: subtotal + tax, totalOrder: (subtotal + tax) * questionnaire.quantity };
+  }, [hamper, qtyOverrides, questionnaire]);
+
+  const fmtDisplay = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+  const dateStr = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+  const deliveryStr = questionnaire.deliveryDate
+    ? new Date(questionnaire.deliveryDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+    : "TBD";
+
+  const roleLabels: Record<string, string> = { hero: "Hero", supporting: "Supporting", filler: "Filler", packaging: "Packaging" };
+
+  return (
+    <div className="bg-white text-gray-900 shadow-2xl rounded-lg overflow-hidden max-w-[700px] w-full mx-auto" style={{ fontFamily: "system-ui, -apple-system, sans-serif" }}>
+      {/* Header */}
+      <div className="bg-primary px-8 py-6 text-primary-foreground">
+        <h1 className="text-xl font-bold tracking-wide">GIFT HAMPER PROPOSAL</h1>
+        <div className="flex items-center justify-between mt-2 text-xs opacity-90">
+          <span>Prepared for {questionnaire.clientName || "Client"} · {dateStr}</span>
+          {questionnaire.company && <span>{questionnaire.company}</span>}
+        </div>
+      </div>
+      <div className="h-0.5 bg-primary/40" />
+
+      <div className="px-8 py-6 space-y-6">
+        {/* Title */}
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">{hamper.name}</h2>
+          <p className="text-xs text-gray-500 mt-0.5">{typeLabel} · Score: {score}/100 · {hamper.inventory.status} stock</p>
+        </div>
+
+        {/* Order summary */}
+        <div className="bg-gray-50 border border-gray-200 rounded-lg px-5 py-4">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Order Summary</p>
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            <div><span className="font-semibold text-gray-600">Client:</span> <span>{questionnaire.clientName || "—"}</span></div>
+            <div><span className="font-semibold text-gray-600">Quantity:</span> <span>{questionnaire.quantity} hampers</span></div>
+            <div><span className="font-semibold text-gray-600">Delivery:</span> <span>{deliveryStr}</span></div>
+            <div><span className="font-semibold text-gray-600">Budget:</span> <span>{fmtDisplay(bu.total)} per hamper</span></div>
+            <div><span className="font-semibold text-gray-600">Packaging:</span> <span className="capitalize">{questionnaire.packagingType || "Standard"}</span></div>
+            <div><span className="font-semibold text-gray-600">Budget Used:</span> <span>{bu.pct}%</span></div>
+          </div>
+        </div>
+
+        {/* Product table */}
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Product Breakdown</p>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-primary text-primary-foreground text-xs">
+                <th className="text-left px-3 py-2 font-semibold">Item</th>
+                <th className="text-left px-3 py-2 font-semibold">Role</th>
+                <th className="text-center px-3 py-2 font-semibold">Qty</th>
+                <th className="text-right px-3 py-2 font-semibold">Unit Price</th>
+                <th className="text-right px-3 py-2 font-semibold">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {hamper.items.map((item, idx) => {
+                const qty = qtyOverrides[item.name] ?? item.qty;
+                const lineTotal = item.unitPrice * qty;
+                return (
+                  <tr key={item.name} className={idx % 2 === 0 ? "bg-purple-50/40" : ""}>
+                    <td className={`px-3 py-2 ${item.role === "hero" ? "font-semibold" : ""}`}>
+                      {item.name.length > 35 ? item.name.substring(0, 33) + "…" : item.name}
+                    </td>
+                    <td className="px-3 py-2 text-gray-500 text-xs">{roleLabels[item.role] || item.role}</td>
+                    <td className="px-3 py-2 text-center tabular-nums">{qty}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtDisplay(item.unitPrice)}</td>
+                    <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtDisplay(lineTotal)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pricing */}
+        <div className="flex justify-end">
+          <div className="w-64 space-y-1.5 text-sm">
+            <div className="flex justify-between text-gray-500">
+              <span>Subtotal</span>
+              <span className="tabular-nums text-gray-900">{fmtDisplay(pricing.subtotal)}</span>
+            </div>
+            <div className="flex justify-between text-gray-500">
+              <span>GST ({hamper.gstPercent}%)</span>
+              <span className="tabular-nums text-gray-900">{fmtDisplay(pricing.tax)}</span>
+            </div>
+            <div className="flex justify-between items-center bg-primary text-primary-foreground rounded-md px-3 py-2 font-bold">
+              <span>Per Hamper</span>
+              <span className="tabular-nums">{fmtDisplay(pricing.grand)}</span>
+            </div>
+            <div className="flex justify-between pt-2 text-base font-bold">
+              <span>Total ({questionnaire.quantity} hampers)</span>
+              <span className="tabular-nums text-primary">{fmtDisplay(pricing.totalOrder)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Why this hamper */}
+        {reasons.length > 0 && (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg px-5 py-4">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1">
+              <Lightbulb className="h-3 w-3" /> Why This Hamper
+            </p>
+            <ul className="space-y-1">
+              {reasons.map((r, i) => (
+                <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
+                  <span className="text-primary mt-0.5">•</span>
+                  <span>{r}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="border-t border-gray-200 px-8 py-3 flex justify-between text-[10px] text-gray-400">
+        <span>Valid for 7 days. Prices subject to availability.</span>
+        <span>Generated by Hamper Designer</span>
+      </div>
+    </div>
+  );
+}
+
 export default function HamperPdfDialog({
   open,
   onOpenChange,
@@ -296,44 +442,13 @@ export default function HamperPdfDialog({
   qtyOverrides,
   questionnaire,
 }: HamperPdfDialogProps) {
-  const [pageImages, setPageImages] = useState<string[]>([]);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [isGenerating, setIsGenerating] = useState(false);
   const pdfRef = useRef<jsPDF | null>(null);
 
-  const generate = useCallback(() => {
-    setIsGenerating(true);
-    setCurrentPage(0);
-    setTimeout(() => {
-      try {
-        const doc = generatePdf(hamper, qtyOverrides, questionnaire);
-        pdfRef.current = doc;
-        const dataUri = doc.output("datauristring");
-        setPageImages([dataUri]);
-
-      } catch (err) {
-        console.error("PDF generation failed:", err);
-      } finally {
-        setIsGenerating(false);
-      }
-    }, 50);
-  }, [hamper, qtyOverrides, questionnaire]);
-
-  useEffect(() => {
-    if (open) {
-      generate();
-    } else {
-      setPageImages([]);
-      pdfRef.current = null;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  const handleDownload = () => {
-    if (!pdfRef.current) return;
+  const handleDownload = useCallback(() => {
+    const doc = generatePdf(hamper, qtyOverrides, questionnaire);
     const safeName = hamper.name.replace(/[^a-zA-Z0-9]/g, "_");
-    pdfRef.current.save(`${safeName}_proposal.pdf`);
-  };
+    doc.save(`${safeName}_proposal.pdf`);
+  }, [hamper, qtyOverrides, questionnaire]);
 
   if (!open) return null;
 
@@ -351,7 +466,7 @@ export default function HamperPdfDialog({
             <X className="h-4 w-4" />
           </Button>
           <div>
-            <h2 className="text-sm font-semibold text-foreground">PDF Preview</h2>
+            <h2 className="text-sm font-semibold text-foreground">Proposal Preview</h2>
             <p className="text-[11px] text-muted-foreground">{hamper.name}</p>
           </div>
         </div>
@@ -359,7 +474,6 @@ export default function HamperPdfDialog({
           size="sm"
           className="gap-1.5 text-xs h-9 px-4"
           onClick={handleDownload}
-          disabled={pageImages.length === 0}
         >
           <Download className="h-3.5 w-3.5" />
           Download PDF
@@ -367,26 +481,12 @@ export default function HamperPdfDialog({
       </div>
 
       {/* Preview area */}
-      <div className="flex-1 overflow-auto flex items-start justify-center p-6 bg-muted/30">
-        {isGenerating ? (
-          <div className="flex flex-col items-center justify-center h-full gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Generating your proposal…</p>
-          </div>
-        ) : pageImages.length > 0 ? (
-          <div className="w-full max-w-[800px]">
-            <iframe
-              src={pageImages[0] + "#toolbar=0&navpanes=0"}
-              className="w-full border rounded-lg shadow-lg bg-white"
-              style={{ height: "calc(100vh - 120px)" }}
-              title="PDF Preview"
-            />
-          </div>
-        ) : (
-          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-            Failed to generate PDF
-          </div>
-        )}
+      <div className="flex-1 overflow-auto p-6 bg-muted/30">
+        <ProposalPreview
+          hamper={hamper}
+          qtyOverrides={qtyOverrides}
+          questionnaire={questionnaire}
+        />
       </div>
     </div>
   );
