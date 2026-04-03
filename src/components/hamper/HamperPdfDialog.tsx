@@ -1,12 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Download, Loader2 } from "lucide-react";
+import { Download, Loader2, X, ChevronLeft, ChevronRight } from "lucide-react";
 import jsPDF from "jspdf";
 import type { GeneratedHamper, QuestionnaireData } from "./types";
 import { budgetUtilization, whyThisHamper, confidenceScore, hamperTypeLabel } from "./hamperIntelligence";
