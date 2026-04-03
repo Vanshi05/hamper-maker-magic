@@ -19,7 +19,7 @@ interface HamperPdfDialogProps {
   questionnaire: QuestionnaireData;
 }
 
-const fmt = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+const fmt = (n: number) => `Rs.${n.toLocaleString("en-IN")}`;
 
 function generatePdf(
   hamper: GeneratedHamper,
