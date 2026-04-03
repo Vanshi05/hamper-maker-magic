@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Loader2, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Download, Loader2, X } from "lucide-react";
 import jsPDF from "jspdf";
 import type { GeneratedHamper, QuestionnaireData } from "./types";
 import { budgetUtilization, whyThisHamper, confidenceScore, hamperTypeLabel } from "./hamperIntelligence";
