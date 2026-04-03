@@ -16,7 +16,8 @@ import {
   confidenceScore,
   hamperTypeLabel,
 } from "./hamperIntelligence";
-import React from "react";
+import React, { useState } from "react";
+import HamperPdfDialog from "./HamperPdfDialog";
 
 interface HamperPreviewProps {
   hamper: GeneratedHamper;
