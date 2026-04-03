@@ -16,7 +16,8 @@ import {
   confidenceScore,
   hamperTypeLabel,
 } from "./hamperIntelligence";
-import React from "react";
+import React, { useState } from "react";
+import HamperPdfDialog from "./HamperPdfDialog";
 
 interface HamperPreviewProps {
   hamper: GeneratedHamper;
@@ -66,6 +67,7 @@ const budgetBarColor = (pct: number) => {
 };
 
 const HamperPreview = ({ hamper, qtyOverrides, onAdjustQty, questionnaire }: HamperPreviewProps) => {
+  const [pdfOpen, setPdfOpen] = useState(false);
   const pricing = React.useMemo(() => {
     let taxable = 0;
     hamper.items.forEach((i) => {
@@ -237,7 +239,7 @@ const HamperPreview = ({ hamper, qtyOverrides, onAdjustQty, questionnaire }: Ham
 
       {/* Actions */}
       <div className="grid grid-cols-3 gap-2 bg-background pt-1 pb-2 lg:sticky lg:bottom-0">
-        <Button variant="outline" size="sm" className="gap-1 text-[11px] h-9" onClick={() => handleAction("Preview PDF")}>
+        <Button variant="outline" size="sm" className="gap-1 text-[11px] h-9" onClick={() => setPdfOpen(true)}>
           <FileText className="h-3.5 w-3.5" /> PDF
         </Button>
         <Button variant="outline" size="sm" className="gap-1 text-[11px] h-9" onClick={() => handleAction("Draft Saved")}>
@@ -247,6 +249,16 @@ const HamperPreview = ({ hamper, qtyOverrides, onAdjustQty, questionnaire }: Ham
           <Send className="h-3.5 w-3.5" /> Quote
         </Button>
       </div>
+
+      {questionnaire && (
+        <HamperPdfDialog
+          open={pdfOpen}
+          onOpenChange={setPdfOpen}
+          hamper={hamper}
+          qtyOverrides={qtyOverrides}
+          questionnaire={questionnaire}
+        />
+      )}
     </div>
   );
 };
