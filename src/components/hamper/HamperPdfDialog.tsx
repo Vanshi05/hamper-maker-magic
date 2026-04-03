@@ -296,20 +296,36 @@ export default function HamperPdfDialog({
   qtyOverrides,
   questionnaire,
 }: HamperPdfDialogProps) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [pageImages, setPageImages] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const pdfRef = useRef<jsPDF | null>(null);
 
   const generate = useCallback(() => {
     setIsGenerating(true);
-    // Use setTimeout to allow the loading state to render
+    setCurrentPage(0);
     setTimeout(() => {
       try {
         const doc = generatePdf(hamper, qtyOverrides, questionnaire);
         pdfRef.current = doc;
-        const blob = doc.output("blob");
-        const url = URL.createObjectURL(blob);
-        setPreviewUrl(url);
+
+        // Convert each page to an image using jsPDF's internal canvas
+        const totalPages = doc.getNumberOfPages();
+        const images: string[] = [];
+        for (let i = 1; i <= totalPages; i++) {
+          doc.setPage(i);
+          // Use output as data URI for each page by creating a single-page doc
+          const singlePage = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+          const pageData = doc.output("arraybuffer");
+          // Instead, render the full PDF as images using the canvas approach
+          // jsPDF doesn't natively support per-page image export, so we use the data URI
+          images.push(""); // placeholder
+        }
+
+        // Use a simpler approach: render the PDF as a single data URI
+        const dataUri = doc.output("datauristring");
+        setPageImages([dataUri]);
+        
       } catch (err) {
         console.error("PDF generation failed:", err);
       } finally {
@@ -322,10 +338,7 @@ export default function HamperPdfDialog({
     if (open) {
       generate();
     } else {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-        setPreviewUrl(null);
-      }
+      setPageImages([]);
       pdfRef.current = null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -337,45 +350,59 @@ export default function HamperPdfDialog({
     pdfRef.current.save(`${safeName}_proposal.pdf`);
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl h-[85vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="px-5 py-3 border-b border-border/50 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-sm font-semibold">
-              PDF Preview — {hamper.name}
-            </DialogTitle>
-            <Button
-              size="sm"
-              className="gap-1.5 text-xs h-8"
-              onClick={handleDownload}
-              disabled={!previewUrl}
-            >
-              <Download className="h-3.5 w-3.5" />
-              Download PDF
-            </Button>
-          </div>
-        </DialogHeader>
+  if (!open) return null;
 
-        <div className="flex-1 bg-muted/50 overflow-hidden">
-          {isGenerating ? (
-            <div className="flex items-center justify-center h-full gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              Generating PDF…
-            </div>
-          ) : previewUrl ? (
+  return (
+    <div className="fixed inset-0 z-[100] flex flex-col bg-background/95 backdrop-blur-sm animate-in fade-in-0 duration-200">
+      {/* Top bar */}
+      <div className="flex items-center justify-between px-6 py-3 border-b border-border/50 bg-card shadow-sm flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => onOpenChange(false)}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">PDF Preview</h2>
+            <p className="text-[11px] text-muted-foreground">{hamper.name}</p>
+          </div>
+        </div>
+        <Button
+          size="sm"
+          className="gap-1.5 text-xs h-9 px-4"
+          onClick={handleDownload}
+          disabled={pageImages.length === 0}
+        >
+          <Download className="h-3.5 w-3.5" />
+          Download PDF
+        </Button>
+      </div>
+
+      {/* Preview area */}
+      <div className="flex-1 overflow-auto flex items-start justify-center p-6 bg-muted/30">
+        {isGenerating ? (
+          <div className="flex flex-col items-center justify-center h-full gap-3">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Generating your proposal…</p>
+          </div>
+        ) : pageImages.length > 0 ? (
+          <div className="w-full max-w-[800px]">
             <iframe
-              src={previewUrl}
-              className="w-full h-full border-0"
+              src={pageImages[0] + "#toolbar=0&navpanes=0"}
+              className="w-full border rounded-lg shadow-lg bg-white"
+              style={{ height: "calc(100vh - 120px)" }}
               title="PDF Preview"
             />
-          ) : (
-            <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-              Failed to generate PDF
-            </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+            Failed to generate PDF
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
