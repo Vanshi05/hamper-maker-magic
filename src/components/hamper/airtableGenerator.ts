@@ -1,6 +1,6 @@
 import type { QuestionnaireData, GeneratedHamper, HamperItem, Feasibility, BadgeType, InventoryStatus } from "./types";
 import { PACKAGING_OPTIONS } from "./types";
-import { supabase } from "@/integrations/supabase/client";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 
 // ── Airtable Product shape ──────────────────────────────────────────
 export interface AirtableProduct {
