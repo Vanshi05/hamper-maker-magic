@@ -445,9 +445,16 @@ export default function HamperPdfDialog({
   const pdfRef = useRef<jsPDF | null>(null);
 
   const handleDownload = useCallback(() => {
-    const doc = generatePdf(hamper, qtyOverrides, questionnaire);
-    const safeName = hamper.name.replace(/[^a-zA-Z0-9]/g, "_");
-    doc.save(`${safeName}_proposal.pdf`);
+    try {
+      const doc = generatePdf(hamper, qtyOverrides, questionnaire);
+      const safeName = hamper.name.replace(/[^a-zA-Z0-9]/g, "_");
+      doc.save(`${safeName}_proposal.pdf`);
+    } catch (err: any) {
+      console.error("[HamperPdfDialog] PDF generation failed:", err);
+      import("sonner").then(({ toast }) =>
+        toast.error("PDF generation failed: " + (err?.message || "Unknown error"))
+      );
+    }
   }, [hamper, qtyOverrides, questionnaire]);
 
   if (!open) return null;
