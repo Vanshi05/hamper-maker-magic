@@ -1,6 +1,6 @@
 import type { QuestionnaireData, GeneratedHamper, HamperItem, Feasibility, BadgeType, InventoryStatus } from "./types";
 import { PACKAGING_OPTIONS } from "./types";
-import { supabase } from "@/integrations/supabase/client";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 
 // ── Airtable Product shape ──────────────────────────────────────────
 export interface AirtableProduct {
@@ -28,7 +28,7 @@ function getProductType(p: AirtableProduct): string {
 
 // ── Fetch products from edge function ──
 export async function fetchProducts(): Promise<AirtableProduct[]> {
-  const { data, error } = await supabase.functions.invoke("products", {
+  const { data, error } = await getSupabaseClient().functions.invoke("products", {
     method: "POST",
   });
 
