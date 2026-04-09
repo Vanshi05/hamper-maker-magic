@@ -169,7 +169,7 @@ const HamperDesigner = () => {
       <main className="flex-1 max-w-[1920px] mx-auto px-4 py-4 w-full">
         {phase === "wizard" && (
           <div className="flex items-start justify-center pt-6">
-            <HamperWizard onGenerate={handleGenerate} products={products} isLoadingProducts={isLoadingProducts} />
+            <HamperWizard onGenerate={handleGenerate} products={products} isLoadingProducts={isLoadingProducts} initialData={questionnaire} />
           </div>
         )}
 
