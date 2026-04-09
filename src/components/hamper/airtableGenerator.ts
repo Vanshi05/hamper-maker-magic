@@ -28,14 +28,26 @@ function getProductType(p: AirtableProduct): string {
 
 // ── Fetch products from edge function ──
 export async function fetchProducts(): Promise<AirtableProduct[]> {
-  const { supabase } = await import("@/integrations/supabase/client");
-  const { data, error } = await supabase.functions.invoke("products", {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Missing Supabase configuration. Please check environment variables.");
+  }
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/products`, {
     method: "POST",
+    headers: {
+      "Authorization": `Bearer ${supabaseKey}`,
+      "Content-Type": "application/json",
+    },
   });
 
-  if (error) {
-    throw new Error(`Edge function error: ${error.message}`);
+  if (!response.ok) {
+    throw new Error(`Edge function error: ${response.status} ${response.statusText}`);
   }
+
+  const data = await response.json();
 
   if (!data?.success) {
     throw new Error(data?.error || "Failed to fetch products");
