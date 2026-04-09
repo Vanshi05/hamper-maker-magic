@@ -27,9 +27,9 @@ export default async function handler(req, res) {
       });
     }
 
-    // Fetch Sale record by Sr No
+    // Fetch Sale record by autonum
     const saleTableName = encodeURIComponent("Sale");
-    const saleFormula = encodeURIComponent(`{Sr No}="${invoiceNumber}"`);
+    const saleFormula = encodeURIComponent(`{autonum}="${invoiceNumber}"`);
     const saleUrl = `https://api.airtable.com/v0/${baseId}/${saleTableName}?filterByFormula=${saleFormula}&maxRecords=1`;
 
     const saleResponse = await fetch(saleUrl, {
