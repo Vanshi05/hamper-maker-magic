@@ -31,9 +31,9 @@ serve(async (req) => {
       );
     }
 
-    // Fetch Sale record by Sr No
+    // Fetch Sale record by autonum
     const saleTableName = encodeURIComponent("Sale");
-    const saleFormula = encodeURIComponent(`{Sr No}="${invoiceNumber}"`);
+    const saleFormula = encodeURIComponent(`{autonum}="${invoiceNumber}"`);
     const saleUrl = `https://api.airtable.com/v0/${baseId}/${saleTableName}?filterByFormula=${saleFormula}&maxRecords=1`;
 
     console.log("Fetching invoice:", invoiceNumber);
@@ -225,8 +225,8 @@ serve(async (req) => {
         data: {
           invoice: {
             invoiceNumber: saleFields.sales_invoice_number || saleFields["Invoice Number"] || invoiceNumber,
-            srNo: saleFields["Sr No"] || saleFields.sr_no || invoiceNumber,
-            invoiceDate: saleFields["Invoice Date"] || saleFields.invoice_date || "",
+            srNo: saleFields["autonum"] || saleFields.autonum || invoiceNumber,
+            invoiceDate: saleFields.invoice_date || saleFields["Invoice Date"] || "",
             billingAddress: billingAddress,
             gst: saleFields["GST"] || saleFields.gst || "",
             contactPerson: contactPerson,

@@ -23,7 +23,7 @@ serve(async (req) => {
     }
 
     const tableName = encodeURIComponent("Sale");
-    const airtableUrl = `https://api.airtable.com/v0/${baseId}/${tableName}?maxRecords=20&sort%5B0%5D%5Bfield%5D=Invoice%20Date&sort%5B0%5D%5Bdirection%5D=desc`;
+    const airtableUrl = `https://api.airtable.com/v0/${baseId}/${tableName}?maxRecords=20&sort%5B0%5D%5Bfield%5D=invoice_date&sort%5B0%5D%5Bdirection%5D=desc`;
 
     console.log("Fetching recent invoices");
 
@@ -44,10 +44,9 @@ serve(async (req) => {
 
     const invoices = (data.records || [])
       .map((record: any) => ({
-        srNo: String(record.fields["Sr No"] ?? ""),
+        srNo: String(record.fields["autonum"] ?? record.fields.autonum ?? ""),
         invoiceNumber: String(record.fields.sales_invoice_number || record.fields["Invoice Number"] || ""),
-        invoiceDate: record.fields["Invoice Date"] || record.fields.invoice_date || "",
-        billingAddress: record.fields["Billing Address"] || record.fields.billing_address || "",
+        invoiceDate: record.fields.invoice_date || record.fields["Invoice Date"] || "",
       }))
       .filter((inv: any) => inv.srNo !== "");
 
