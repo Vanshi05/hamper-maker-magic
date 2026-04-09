@@ -1,73 +1,42 @@
 
-Audit only — no code changes.
 
-What renders `/staff/hamper-designer`
-- There is no `src/pages/staff/HamperDesigner.tsx`.
-- The route is defined in `src/App.tsx`:
-  - `import HamperDesigner from "./pages/HamperDesigner";`
-  - `<Route path="/staff/hamper-designer" element={<HamperDesigner />} />`
+## Invoice Generator — Fix Airtable Column Name Mismatches
 
-Full import audit in `src/`
+### Problem
+Two Airtable field names changed in the Sale table:
+- `Sr No` → **`autonum`**
+- `Invoice Date` → **`invoice_date`**
+- `billing_address` was **deleted** from Sale (already handled — read from Sale_LI)
 
-1) `src/integrations/supabase/client.ts`
-- Exact import line:
-  - `import { createClient } from '@supabase/supabase-js';`
-- Is it in the `/staff/hamper-designer` import graph?
-  - Not as a static top-level import from the page tree.
-  - It is reached indirectly at runtime from `src/components/hamper/airtableGenerator.ts` via a dynamic import when `fetchProducts()` runs.
+This breaks both the `invoice-list` and `invoicedata` edge functions.
 
-2) `src/lib/supabaseClient.ts`
-- Exact import line:
-  - `import { supabase as _supabase } from "@/integrations/supabase/client";`
-- Is it in the `/staff/hamper-designer` import graph?
-  - No.
-  - I found no imports of `@/lib/supabaseClient` anywhere in `src/`.
+Additionally, `src/hooks/useInvoice.ts` has a **hardcoded Supabase URL from a different project** (`dpwdnuqvnclbjarowgmv`) instead of using the current project's env vars.
 
-3) `src/components/hamper/airtableGenerator.ts`
-- Relevant import expression found:
-  - `const { supabase } = await import("@/integrations/supabase/client");`
-- Is it in the `/staff/hamper-designer` import graph?
-  - Yes, directly.
-  - `src/pages/HamperDesigner.tsx` imports:
-    - `import { generateHampersFromAirtable, fetchProducts } from "@/components/hamper/airtableGenerator";`
-  - `fetchProducts()` is called in a `useEffect` on page mount, so this dynamic import runs as soon as the hamper designer page loads.
+---
 
-No matches found
-- No `from "@/lib/supabaseClient"` imports anywhere in `src/`.
+### Changes
 
-Import graph for the hamper designer route
-```text
-src/App.tsx
-  -> src/pages/HamperDesigner.tsx
-     -> src/components/hamper/airtableGenerator.ts
-        -> dynamic runtime import("@/integrations/supabase/client")
-```
+**1. `supabase/functions/invoice-list/index.ts`**
+- Change sort field from `Invoice%20Date` → `invoice_date` (line 26)
+- Change `record.fields["Sr No"]` → `record.fields["autonum"]` (line 47)
+- Change `record.fields["Invoice Date"]` → `record.fields["invoice_date"]` (line 49)
+- Remove `billing_address` / `Billing Address` read from Sale records (line 50) — field was deleted
 
-Separate unused path currently present
-```text
-src/lib/supabaseClient.ts
-  -> src/integrations/supabase/client.ts
-```
-- But `src/lib/supabaseClient.ts` currently has no incoming imports, so it is not part of the hamper designer route path.
+**2. `supabase/functions/invoicedata/index.ts`**
+- Change filter formula from `{Sr No}` → `{autonum}` (line 36)
+- Change `saleFields["Sr No"]` → `saleFields["autonum"]` (line 228)
+- Change `saleFields["Invoice Date"]` priority to `saleFields["invoice_date"]` first (line 229)
 
-Does `src/lib/supabaseClient.ts` still exist?
-- Yes.
+**3. `src/hooks/useInvoice.ts`**
+- Replace hardcoded `SUPABASE_URL` and `SUPABASE_ANON_KEY` with `import.meta.env.VITE_SUPABASE_URL` and `import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY` — the current values point to a completely different Supabase project
 
-Full contents of `src/lib/supabaseClient.ts`
-```ts
-import { supabase as _supabase } from "@/integrations/supabase/client";
+**4. `api/invoice/list.js` and `api/invoice/data.js`** (Vercel serverless — kept in sync)
+- Same field name updates: `Sr No` → `autonum`, `Invoice Date` → `invoice_date`
 
-let initialized = false;
+---
 
-export function getSupabaseClient() {
-  if (!initialized) {
-    initialized = true;
-  }
-  return _supabase;
-}
-```
+### What stays unchanged
+- No logic changes, no Airtable API call structure changes
+- Sale_LI table references stay the same (no column renames reported there)
+- Frontend types, components, and PDF generation — untouched
 
-Bottom-line from the audit
-- In the current `src/` tree, I do not see any other static top-level import path from the hamper designer page into `@/integrations/supabase/client`.
-- The active hamper designer path currently reaches the client through `src/components/hamper/airtableGenerator.ts`, and that happens via dynamic import inside `fetchProducts()`, which is invoked immediately on page mount.
-- `src/lib/supabaseClient.ts` still exists, but it appears unused.
