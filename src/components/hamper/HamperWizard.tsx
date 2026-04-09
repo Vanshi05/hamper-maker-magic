@@ -103,6 +103,7 @@ interface HamperWizardProps {
   onGenerate: (data: QuestionnaireData) => void;
   products?: AirtableProduct[];
   isLoadingProducts?: boolean;
+  initialData?: QuestionnaireData | null;
 }
 
 const STEPS = [
@@ -140,9 +141,9 @@ const INTENT_PRESETS: {
   { value: "premium", label: "Premium Client", description: "Focuses on luxury items, higher perceived value, and premium packaging.", icon: Crown },
 ];
 
-const HamperWizard = ({ onGenerate, products = [], isLoadingProducts }: HamperWizardProps) => {
-  const [step, setStep] = useState(0);
-  const [data, setData] = useState<QuestionnaireData>({ ...DEFAULT_QUESTIONNAIRE });
+const HamperWizard = ({ onGenerate, products = [], isLoadingProducts, initialData }: HamperWizardProps) => {
+  const [step, setStep] = useState(initialData ? 3 : 0);
+  const [data, setData] = useState<QuestionnaireData>(initialData ? { ...initialData } : { ...DEFAULT_QUESTIONNAIRE });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [mustHaveSearch, setMustHaveSearch] = useState("");
   const [mustHaveExpanded, setMustHaveExpanded] = useState(false);
