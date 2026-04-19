@@ -1,42 +1,38 @@
 
+Fix scope: only `src/components/hamper/airtableGenerator.ts`.
 
-## Invoice Generator — Fix Airtable Column Name Mismatches
+What broke
+- The last change replaced the previously working product fetch with a direct `fetch()` that hard-requires `import.meta.env.VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
+- In the current preview/runtime, those values are coming through as missing in this path, so `fetchProducts()` throws immediately.
+- That is why product prefetch fails and the hamper flow breaks before generation. The new optimizer itself is not the primary problem.
 
-### Problem
-Two Airtable field names changed in the Sale table:
-- `Sr No` → **`autonum`**
-- `Invoice Date` → **`invoice_date`**
-- `billing_address` was **deleted** from Sale (already handled — read from Sale_LI)
+Plan
+1. Restore `fetchProducts()` to a resilient implementation in `src/components/hamper/airtableGenerator.ts`.
+   - Keep the current direct edge-function fetch as the first path when env vars are available.
+   - Add a fallback to the previously working integrated client-based function call if those env vars are missing.
+   - Keep the returned shape exactly the same: `Promise<AirtableProduct[]>`.
 
-This breaks both the `invoice-list` and `invoicedata` edge functions.
+2. Normalize error handling inside `fetchProducts()`.
+   - Return the same success/error behavior regardless of which path is used.
+   - Preserve clear error messages so future regressions are easier to identify.
 
-Additionally, `src/hooks/useInvoice.ts` has a **hardcoded Supabase URL from a different project** (`dpwdnuqvnclbjarowgmv`) instead of using the current project's env vars.
+3. Do not touch anything else.
+   - No UI changes.
+   - No optimizer/scoring/selection changes.
+   - No backend or Airtable changes.
+   - No edits outside `src/components/hamper/airtableGenerator.ts`.
 
----
+Technical details
+- Root cause is the hard failure at the top of `fetchProducts()`:
+  - `if (!supabaseUrl || !supabaseKey) throw new Error(...)`
+- The safest recovery is a single-file compatibility fix:
+  - env-based direct fetch when available
+  - fallback invocation through the existing generated client when not
+- This preserves the hamper optimization work while removing the runtime fragility introduced by the last prompt.
 
-### Changes
-
-**1. `supabase/functions/invoice-list/index.ts`**
-- Change sort field from `Invoice%20Date` → `invoice_date` (line 26)
-- Change `record.fields["Sr No"]` → `record.fields["autonum"]` (line 47)
-- Change `record.fields["Invoice Date"]` → `record.fields["invoice_date"]` (line 49)
-- Remove `billing_address` / `Billing Address` read from Sale records (line 50) — field was deleted
-
-**2. `supabase/functions/invoicedata/index.ts`**
-- Change filter formula from `{Sr No}` → `{autonum}` (line 36)
-- Change `saleFields["Sr No"]` → `saleFields["autonum"]` (line 228)
-- Change `saleFields["Invoice Date"]` priority to `saleFields["invoice_date"]` first (line 229)
-
-**3. `src/hooks/useInvoice.ts`**
-- Replace hardcoded `SUPABASE_URL` and `SUPABASE_ANON_KEY` with `import.meta.env.VITE_SUPABASE_URL` and `import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY` — the current values point to a completely different Supabase project
-
-**4. `api/invoice/list.js` and `api/invoice/data.js`** (Vercel serverless — kept in sync)
-- Same field name updates: `Sr No` → `autonum`, `Invoice Date` → `invoice_date`
-
----
-
-### What stays unchanged
-- No logic changes, no Airtable API call structure changes
-- Sale_LI table references stay the same (no column renames reported there)
-- Frontend types, components, and PDF generation — untouched
-
+Validation after implementation
+- Open `/staff/hamper-designer`
+- Confirm the “Missing Supabase configuration” toast is gone
+- Confirm products prefetch succeeds
+- Generate hampers successfully from the questionnaire
+- Click Edit / Regenerate and confirm the flow still works end-to-end
