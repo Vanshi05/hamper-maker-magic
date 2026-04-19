@@ -123,25 +123,96 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-// ── Select items within budget ──────────────────────────────────────
-function selectWithinBudget(
+// ── Combination generator (k of n) — capped for performance ─────────
+function combinations<T>(arr: T[], k: number, maxCombos = 60): T[][] {
+  if (k <= 0 || arr.length === 0) return [[]];
+  if (k > arr.length) return [];
+  const out: T[][] = [];
+  const n = arr.length;
+  const idx = Array.from({ length: k }, (_, i) => i);
+  while (true) {
+    out.push(idx.map((i) => arr[i]));
+    if (out.length >= maxCombos) break;
+    let i = k - 1;
+    while (i >= 0 && idx[i] === i + n - k) i--;
+    if (i < 0) break;
+    idx[i]++;
+    for (let j = i + 1; j < k; j++) idx[j] = idx[j - 1] + 1;
+  }
+  return out;
+}
+
+// ── Pick best combination: max total price within budget ────────────
+function pickBestCombo(
   pool: AirtableProduct[],
   count: number,
-  budget: number
+  budget: number,
+  maxCombos = 60
 ): AirtableProduct[] {
-  // Pool is already shuffled — no deterministic sorting
-  const selected: AirtableProduct[] = [];
-  let spent = 0;
+  if (count <= 0) return [];
+  if (pool.length === 0) return [];
 
-  for (const item of pool) {
-    if (selected.length >= count) break;
-    if (spent + item.pre_tax_db <= budget) {
-      selected.push(item);
-      spent += item.pre_tax_db;
+  // Sample up to maxCombos combinations from a shuffled pool
+  const sampled = shuffle(pool).slice(0, Math.min(pool.length, count + 8));
+  const combos = combinations(sampled, Math.min(count, sampled.length), maxCombos);
+
+  let best: AirtableProduct[] = [];
+  let bestTotal = -1;
+
+  for (const combo of combos) {
+    const total = combo.reduce((s, p) => s + p.pre_tax_db, 0);
+    if (total <= budget && total > bestTotal) {
+      best = combo;
+      bestTotal = total;
     }
   }
 
-  return selected;
+  // Fallback: if nothing fits budget, take the cheapest combo we can
+  if (best.length === 0 && combos.length > 0) {
+    best = combos.reduce((min, c) => {
+      const t = c.reduce((s, p) => s + p.pre_tax_db, 0);
+      const mt = min.reduce((s, p) => s + p.pre_tax_db, 0);
+      return t < mt ? c : min;
+    });
+  }
+  return best;
+}
+
+// ── Pick filler combo: closest to (and ≤) filler budget ─────────────
+function pickFillerCombo(
+  pool: AirtableProduct[],
+  count: number,
+  fillerBudget: number,
+  maxCombos = 80
+): AirtableProduct[] {
+  if (count <= 0 || pool.length === 0) return [];
+
+  const sampled = shuffle(pool).slice(0, Math.min(pool.length, count + 10));
+  const combos = combinations(sampled, Math.min(count, sampled.length), maxCombos);
+
+  let best: AirtableProduct[] = [];
+  let bestDiff = Infinity;
+
+  for (const combo of combos) {
+    const total = combo.reduce((s, p) => s + p.pre_tax_db, 0);
+    if (total <= fillerBudget) {
+      const diff = fillerBudget - total;
+      if (diff < bestDiff) {
+        best = combo;
+        bestDiff = diff;
+      }
+    }
+  }
+
+  if (best.length === 0 && combos.length > 0) {
+    // Fallback: cheapest combo
+    best = combos.reduce((min, c) => {
+      const t = c.reduce((s, p) => s + p.pre_tax_db, 0);
+      const mt = min.reduce((s, p) => s + p.pre_tax_db, 0);
+      return t < mt ? c : min;
+    });
+  }
+  return best;
 }
 
 // ── Find closest packaging ──────────────────────────────────────────
@@ -205,32 +276,133 @@ function satisfiesMustHave(
   });
 }
 
-// ── Build a single hamper ───────────────────────────────────────────
+// ── Theme consistency: dominant category share ──────────────────────
+function dominantCategoryShare(products: AirtableProduct[]): number {
+  if (products.length === 0) return 0;
+  const counts = new Map<string, number>();
+  for (const p of products) {
+    const cat = getCategory(p).toLowerCase() || "uncategorized";
+    counts.set(cat, (counts.get(cat) ?? 0) + 1);
+  }
+  const max = Math.max(...counts.values());
+  return max / products.length;
+}
+
+// ── Hamper score (higher = better) ──────────────────────────────────
+function scoreHamper(
+  selectedProducts: AirtableProduct[],
+  totalPrice: number,
+  perHamperBudget: number
+): number {
+  if (perHamperBudget <= 0 || selectedProducts.length === 0) return 0;
+  const utilization = Math.min(1, totalPrice / perHamperBudget);
+  const avgPrice = totalPrice / selectedProducts.length;
+  // Normalize avg price against budget per item — caps at 1
+  const avgNorm = Math.min(1, avgPrice / (perHamperBudget / Math.max(selectedProducts.length, 1)));
+  const consistency = dominantCategoryShare(selectedProducts);
+  return 0.5 * utilization + 0.3 * avgNorm + 0.2 * consistency;
+}
+
+// ── Build a single hamper using combination optimization ────────────
 function buildHamper(
-  heroes: AirtableProduct[],
-  supporting: AirtableProduct[],
-  fillers: AirtableProduct[],
+  heroPool: AirtableProduct[],
+  supportingPool: AirtableProduct[],
+  fillerPool: AirtableProduct[],
   packaging: AirtableProduct | null,
   data: QuestionnaireData,
   perHamperBudget: number,
   index: number
-): { hamper: GeneratedHamper; selectedProducts: AirtableProduct[]; signature: string } | null {
-  const remainingBudget = perHamperBudget - data.packagingCost;
+): {
+  hamper: GeneratedHamper;
+  selectedProducts: AirtableProduct[];
+  signature: string;
+  score: number;
+} | null {
+  const packagingCost = packaging?.pre_tax_db ?? data.packagingCost;
+  const remainingBudget = Math.max(0, perHamperBudget - packagingCost);
   const heroBudget = remainingBudget * (data.heroBudgetPercent / 100);
   const supportingBudget = remainingBudget * (data.supportingBudgetPercent / 100);
-  const fillerBudget = remainingBudget - heroBudget - supportingBudget;
 
-  const selectedHeroes = selectWithinBudget(heroes, data.heroCount, heroBudget);
-  const selectedSupporting = selectWithinBudget(supporting, data.supportingCount, supportingBudget);
-  const selectedFillers = selectWithinBudget(fillers, data.fillerCount, fillerBudget);
+  // Limit pool sizes for performance
+  const heroes = [...heroPool].sort((a, b) => b.pre_tax_db - a.pre_tax_db).slice(0, 10);
+  const supporting = [...supportingPool].sort((a, b) => b.pre_tax_db - a.pre_tax_db).slice(0, 15);
+  const fillers = [...fillerPool].sort((a, b) => a.pre_tax_db - b.pre_tax_db).slice(0, 20);
 
-  const allSelected = [...selectedHeroes, ...selectedSupporting, ...selectedFillers];
+  // HERO: max-value combination within hero budget
+  const selectedHeroes = pickBestCombo(heroes, data.heroCount, heroBudget, 60);
+  const heroSpent = selectedHeroes.reduce((s, p) => s + p.pre_tax_db, 0);
+
+  // SUPPORTING: max-value combination within supporting budget
+  const selectedSupporting = pickBestCombo(supporting, data.supportingCount, supportingBudget, 60);
+  const supportSpent = selectedSupporting.reduce((s, p) => s + p.pre_tax_db, 0);
+
+  // FILLER: fill the actual remaining budget (smarter than fixed split)
+  const remainingForFillers = Math.max(
+    0,
+    perHamperBudget - packagingCost - heroSpent - supportSpent
+  );
+  let selectedFillers = pickFillerCombo(fillers, data.fillerCount, remainingForFillers, 80);
+
+  let allSelected = [...selectedHeroes, ...selectedSupporting, ...selectedFillers];
   if (allSelected.length === 0) return null;
+
+  // ── Optimization loop: if utilization < 80%, try upgrades ────────
+  let totalPrice = allSelected.reduce((s, p) => s + p.pre_tax_db, 0) + packagingCost;
+  let attempts = 0;
+  while (totalPrice < perHamperBudget * 0.8 && attempts < 4) {
+    const headroom = perHamperBudget - totalPrice;
+    let upgraded = false;
+
+    // Try upgrading the cheapest filler with a higher-value one
+    if (selectedFillers.length > 0) {
+      const cheapestIdx = selectedFillers
+        .map((p, i) => ({ p, i }))
+        .sort((a, b) => a.p.pre_tax_db - b.p.pre_tax_db)[0].i;
+      const cheapest = selectedFillers[cheapestIdx];
+      const usedIds = new Set(allSelected.map((p) => p.p_id));
+      const candidate = [...fillerPool, ...supportingPool]
+        .filter((p) => !usedIds.has(p.p_id))
+        .filter((p) => p.pre_tax_db > cheapest.pre_tax_db && p.pre_tax_db - cheapest.pre_tax_db <= headroom)
+        .sort((a, b) => b.pre_tax_db - a.pre_tax_db)[0];
+      if (candidate) {
+        selectedFillers[cheapestIdx] = candidate;
+        upgraded = true;
+      }
+    }
+
+    // Try upgrading a supporting item
+    if (!upgraded && selectedSupporting.length > 0) {
+      const cheapestIdx = selectedSupporting
+        .map((p, i) => ({ p, i }))
+        .sort((a, b) => a.p.pre_tax_db - b.p.pre_tax_db)[0].i;
+      const cheapest = selectedSupporting[cheapestIdx];
+      const usedIds = new Set(allSelected.map((p) => p.p_id));
+      const candidate = supportingPool
+        .filter((p) => !usedIds.has(p.p_id))
+        .filter((p) => p.pre_tax_db > cheapest.pre_tax_db && p.pre_tax_db - cheapest.pre_tax_db <= headroom)
+        .sort((a, b) => b.pre_tax_db - a.pre_tax_db)[0];
+      if (candidate) {
+        selectedSupporting[cheapestIdx] = candidate;
+        upgraded = true;
+      }
+    }
+
+    if (!upgraded) break;
+    allSelected = [...selectedHeroes, ...selectedSupporting, ...selectedFillers];
+    totalPrice = allSelected.reduce((s, p) => s + p.pre_tax_db, 0) + packagingCost;
+    attempts++;
+  }
 
   // Must-have enforcement
   if (!satisfiesMustHave(allSelected, data.mustHaveItems)) return null;
 
-  // Signature for dedup
+  // Theme consistency: reject if dominant category share < 50% (only when pool has >1 category)
+  const distinctCats = new Set(allSelected.map((p) => getCategory(p).toLowerCase()));
+  if (distinctCats.size > 1 && dominantCategoryShare(allSelected) < 0.5) return null;
+
+  // Strict minimum utilization: reject if total < 60% of budget
+  if (totalPrice < perHamperBudget * 0.6) return null;
+
   const signature = getHamperSignature(selectedHeroes, selectedSupporting, selectedFillers);
 
   const items: HamperItem[] = [
@@ -272,9 +444,8 @@ function buildHamper(
     });
   }
 
-  const totalPrice = items.reduce((sum, it) => sum + it.unitPrice * it.qty, 0);
-  const withinBudget = totalPrice <= perHamperBudget * 1.15;
-
+  const finalTotal = items.reduce((sum, it) => sum + it.unitPrice * it.qty, 0);
+  const withinBudget = finalTotal <= perHamperBudget * 1.15;
   const feasibility: Feasibility = withinBudget ? "green" : "red";
 
   const badges: BadgeType[] = [];
@@ -293,6 +464,8 @@ function buildHamper(
   const anyImage = allSelected.find((p) => p.image)?.image;
   const fallbackImage = "https://images.unsplash.com/photo-1549465220-1a8b9238f0b0?w=400&h=300&fit=crop";
 
+  const score = scoreHamper(allSelected, finalTotal, perHamperBudget);
+
   return {
     hamper: {
       id: `gen-${index}`,
@@ -302,7 +475,7 @@ function buildHamper(
         ...selectedSupporting.map((s) => s.fancy_name),
         ...selectedFillers.map((f) => f.fancy_name),
       ],
-      totalPrice,
+      totalPrice: finalTotal,
       image: heroImage || anyImage || fallbackImage,
       badges,
       items,
@@ -314,6 +487,7 @@ function buildHamper(
     },
     selectedProducts: allSelected,
     signature,
+    score,
   };
 }
 
@@ -324,12 +498,12 @@ export async function generateHampersFromAirtable(
 ): Promise<GeneratedHamper[]> {
   const allProducts = cachedProducts || (await fetchProducts());
 
-  // Step 2: Base filter — exclude pending tiers, empty tiers
+  // Base filter — exclude pending tiers, empty tiers
   let filtered = allProducts.filter(
     (p) => p.product_tier.toLowerCase() !== "pending" && p.product_tier !== ""
   );
 
-  // Step 3: Forbidden categories filter
+  // Forbidden categories filter
   if (data.forbiddenCategories.length > 0) {
     const forbidden = data.forbiddenCategories.map((c) => c.toLowerCase());
     filtered = filtered.filter((p) => {
@@ -338,7 +512,7 @@ export async function generateHampersFromAirtable(
     });
   }
 
-  // Step 4: Dietary filter
+  // Dietary filter
   const dietaryBlocked = getDietaryBlockedWords(data.dietaryNotes);
   if (dietaryBlocked.length > 0) {
     filtered = filtered.filter((p) =>
@@ -348,19 +522,18 @@ export async function generateHampersFromAirtable(
     );
   }
 
-  // Step 5: Inventory filter
+  // Inventory filter
   filtered = filtered.filter((p) => p.unsold_after_receivables >= data.quantity);
 
-  // Step 6: Split by tier
+  // Split by tier
   let heroes = filtered.filter((p) => p.product_tier.toLowerCase() === "hero");
   let supporting = filtered.filter((p) => p.product_tier.toLowerCase() === "supporting");
   let fillers = filtered.filter((p) => p.product_tier.toLowerCase() === "filler");
   const packagingProducts = filtered.filter((p) => p.product_tier.toLowerCase() === "packaging");
 
-  // Category preference filter — applied BEFORE generation, after tier split
+  // Category preference filter
   const prefValue = data.heroPreference;
   if (prefValue && prefValue !== "no-preference" && prefValue !== "custom") {
-    // Convert slug back to search term: "food-&-beverage" → "food & beverage"
     const prefSearch = prefValue.replace(/-/g, " ").toLowerCase();
 
     const categoryFilter = (p: AirtableProduct) => {
@@ -374,7 +547,6 @@ export async function generateHampersFromAirtable(
     const filteredSupporting = supporting.filter(categoryFilter);
     const filteredFillers = fillers.filter(categoryFilter);
 
-    // Apply if enough products remain; otherwise keep full pool
     if (filteredHeroes.length >= data.heroCount) heroes = filteredHeroes;
     if (filteredSupporting.length >= data.supportingCount) supporting = filteredSupporting;
     if (filteredFillers.length >= data.fillerCount) fillers = filteredFillers;
@@ -389,42 +561,41 @@ export async function generateHampersFromAirtable(
   // Packaging
   const selectedPackaging = selectPackaging(packagingProducts, data.packagingCost);
 
-  // Step 9-10: Generate unique hampers with deduplication
-  const MAX_ATTEMPTS = 20;
-  const MAX_HAMPERS = 5;
+  // Generate unique scored hampers
+  const MAX_ATTEMPTS = 15;
   const generatedSet = new Set<string>();
-  const hampers: GeneratedHamper[] = [];
+  type Scored = { hamper: GeneratedHamper; score: number };
+  const candidates: Scored[] = [];
 
   let attempts = 0;
-  while (attempts < MAX_ATTEMPTS && hampers.length < MAX_HAMPERS) {
-    // Vary pools each attempt
-    const heroPool = shuffle(heroes);
-    const supportPool = shuffle(supporting);
-    const fillerPool = shuffle(fillers);
-
+  while (attempts < MAX_ATTEMPTS && candidates.length < 8) {
     const result = buildHamper(
-      heroPool,
-      supportPool,
-      fillerPool,
+      heroes,
+      supporting,
+      fillers,
       selectedPackaging,
       data,
       perHamperBudget,
-      hampers.length
+      candidates.length
     );
 
     if (result && !generatedSet.has(result.signature)) {
       generatedSet.add(result.signature);
-      hampers.push(result.hamper);
+      candidates.push({ hamper: result.hamper, score: result.score });
     }
 
     attempts++;
   }
 
-  // Sort: green first, then red
-  hampers.sort((a, b) => {
+  // Sort by score (highest first), then by feasibility
+  candidates.sort((a, b) => {
     const order = { green: 0, yellow: 1, red: 2 };
-    return order[a.feasibility] - order[b.feasibility];
+    const fDiff = order[a.hamper.feasibility] - order[b.hamper.feasibility];
+    if (fDiff !== 0) return fDiff;
+    return b.score - a.score;
   });
+
+  const hampers = candidates.map((c) => c.hamper);
 
   // Label: top 3 main, rest backup
   hampers.forEach((h, i) => {
