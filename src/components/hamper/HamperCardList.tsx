@@ -71,9 +71,9 @@ export function HamperEmptyState() {
     <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
       <Package className="h-12 w-12 text-muted-foreground/40" />
       <div>
-        <p className="text-lg font-semibold text-foreground">Couldn't find a perfect match</p>
+        <p className="text-lg font-semibold text-foreground">No matching hampers found</p>
         <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-          Try increasing your budget, removing strict constraints, or reducing quantity.
+          Try relaxing your constraints or increasing your budget.
         </p>
       </div>
     </div>
