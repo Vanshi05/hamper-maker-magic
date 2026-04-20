@@ -112,8 +112,8 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
     setFetchingGhid((prev) => ({ ...prev, [pageId]: true }));
 
     try {
-      const SUPABASE_URL = 'https://dpwdnuqvnclbjarowgmv.supabase.co';
-      const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRwd2RudXF2bmNsYmphcm93Z212Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMTM2OTMsImV4cCI6MjA4NDU4OTY5M30.m2GnYhntrBdwTmK3rp0svWysTEMdss8g_KgqpN7_usg';
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+      const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const response = await fetch(`${SUPABASE_URL}/functions/v1/hamper?gh_id=${encodeURIComponent(ghId)}`, {
         headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
       });
@@ -191,8 +191,8 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
 
     for (const ghId of ghidList) {
       try {
-        const SUPABASE_URL = 'https://dpwdnuqvnclbjarowgmv.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRwd2RudXF2bmNsYmphcm93Z212Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMTM2OTMsImV4cCI6MjA4NDU4OTY5M30.m2GnYhntrBdwTmK3rp0svWysTEMdss8g_KgqpN7_usg';
+        const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+        const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         const response = await fetch(`${SUPABASE_URL}/functions/v1/hamper?gh_id=${encodeURIComponent(ghId)}`, {
           headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
         });
