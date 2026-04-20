@@ -1,38 +1,50 @@
 
-Fix scope: only `src/components/hamper/airtableGenerator.ts`.
 
-What broke
-- The last change replaced the previously working product fetch with a direct `fetch()` that hard-requires `import.meta.env.VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
-- In the current preview/runtime, those values are coming through as missing in this path, so `fetchProducts()` throws immediately.
-- That is why product prefetch fails and the hamper flow breaks before generation. The new optimizer itself is not the primary problem.
+## Fix Supabase init error + stale hardcoded URL
 
-Plan
-1. Restore `fetchProducts()` to a resilient implementation in `src/components/hamper/airtableGenerator.ts`.
-   - Keep the current direct edge-function fetch as the first path when env vars are available.
-   - Add a fallback to the previously working integrated client-based function call if those env vars are missing.
-   - Keep the returned shape exactly the same: `Promise<AirtableProduct[]>`.
+### Scope (2 files only)
 
-2. Normalize error handling inside `fetchProducts()`.
-   - Return the same success/error behavior regardless of which path is used.
-   - Preserve clear error messages so future regressions are easier to identify.
+**1. `src/integrations/supabase/client.ts`** — Add a clear initialization guard so a missing env var produces an actionable error instead of the cryptic `"supabaseUrl is required"` from the SDK. Keep the existing `createClient<Database>(...)` call and auth options exactly as-is.
 
-3. Do not touch anything else.
-   - No UI changes.
-   - No optimizer/scoring/selection changes.
-   - No backend or Airtable changes.
-   - No edits outside `src/components/hamper/airtableGenerator.ts`.
+```ts
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-Technical details
-- Root cause is the hard failure at the top of `fetchProducts()`:
-  - `if (!supabaseUrl || !supabaseKey) throw new Error(...)`
-- The safest recovery is a single-file compatibility fix:
-  - env-based direct fetch when available
-  - fallback invocation through the existing generated client when not
-- This preserves the hamper optimization work while removing the runtime fragility introduced by the last prompt.
+if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+  throw new Error(
+    "Missing Supabase environment variables. Ensure VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY are set in your .env file and restart the dev server."
+  );
+}
 
-Validation after implementation
-- Open `/staff/hamper-designer`
-- Confirm the “Missing Supabase configuration” toast is gone
-- Confirm products prefetch succeeds
-- Generate hampers successfully from the questionnaire
-- Click Edit / Regenerate and confirm the flow still works end-to-end
+export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, { /* unchanged */ });
+```
+
+**2. `src/components/CatalogForm.tsx`** — Replace the stale hardcoded project URL and stale anon key (both pointing to `dpwdnuqvnclbjarowgmv`, the wrong project) at lines 115–118 and 194–197 with the env-var-based versions:
+
+```ts
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+```
+
+The `fetch(...)` URL and headers stay exactly as they are — only the constants change. Both occurrences (single fetch at line 115 and bulk fetch at line 194) get the same fix.
+
+### Verified — no other hardcoded URLs
+
+Searched the whole `src/` tree:
+- `dpwdnuqvnclbjarowgmv` → only in `CatalogForm.tsx` (the 2 spots above)
+- `supabase.co/functions` → no other matches
+- `airtableGenerator.ts` and `useInvoice.ts` already use `import.meta.env.VITE_SUPABASE_URL` correctly
+
+### What stays untouched
+- `src/integrations/supabase/types.ts`
+- All edge functions (`supabase/functions/*`)
+- All hamper generation logic
+- All UI, layout, styling
+- `package.json` (`@supabase/supabase-js` stays)
+
+### Validation after apply
+1. App loads at `/` with no `"supabaseUrl is required"` error
+2. `/staff/hamper-designer` — products fetch and hampers generate
+3. Catalog Generator — single GHID lookup + bulk lookup hit the correct project (`qlzgtbtqnwrgtlhrqdqd`)
+4. Invoice Generator — search, list, PDF all work
+
