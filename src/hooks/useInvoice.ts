@@ -1,8 +1,6 @@
-import { useState, useCallback } from 'react';
-import { InvoiceData, RecentInvoice } from '@/types/invoice';
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+import { useState, useCallback } from "react";
+import { InvoiceData, RecentInvoice } from "@/types/invoice";
+import { AirtableService } from "@/lib/airtable";
 
 export function useInvoice() {
   const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null);
@@ -11,9 +9,9 @@ export function useInvoice() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchInvoice = useCallback(async (invoiceNumber: string | number) => {
-    const invoiceStr = String(invoiceNumber ?? '').trim();
+    const invoiceStr = String(invoiceNumber ?? "").trim();
     if (!invoiceStr) {
-      setError('Please enter an invoice number');
+      setError("Please enter an invoice number");
       return;
     }
 
@@ -22,22 +20,10 @@ export function useInvoice() {
     setInvoiceData(null);
 
     try {
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/invoicedata?invoiceNumber=${encodeURIComponent(invoiceStr)}`, {
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-        }
-      });
-      const result = await response.json();
-
-      if (!result.success) {
-        setError(result.error || 'Failed to fetch invoice');
-        return;
-      }
-
-      setInvoiceData(result.data);
+      const result = await AirtableService.fetchInvoiceData(invoiceStr);
+      setInvoiceData(result as any);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch invoice');
+      setError(err instanceof Error ? err.message : "Failed to fetch invoice");
     } finally {
       setLoading(false);
     }
@@ -45,46 +31,41 @@ export function useInvoice() {
 
   const fetchRecentInvoices = useCallback(async () => {
     try {
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/invoice-list`, {
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-        }
-      });
-      const result = await response.json();
-
-      if (result.success) {
-        setRecentInvoices(result.data || []);
-      }
+      const result = await AirtableService.fetchRecentInvoices();
+      setRecentInvoices(result);
     } catch (err) {
-      console.error('Failed to fetch recent invoices:', err);
+      console.error("Failed to fetch recent invoices:", err);
     }
   }, []);
 
-  const fetchForPdf = useCallback(async (invoiceNumber: string): Promise<InvoiceData | null> => {
-    try {
-      const response = await fetch(`/api/invoice/pdf?invoiceNumber=${encodeURIComponent(invoiceNumber)}`);
-      const result = await response.json();
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to fetch invoice for PDF');
+  const fetchForPdf = useCallback(
+    async (invoiceNumber: string): Promise<InvoiceData | null> => {
+      try {
+        const result = await AirtableService.fetchInvoiceData(invoiceNumber);
+        return result as any;
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to fetch invoice for PDF",
+        );
+        return null;
       }
-
-      return result.data;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch invoice for PDF');
-      return null;
-    }
-  }, []);
+    },
+    [],
+  );
 
   const clearInvoice = useCallback(() => {
     setInvoiceData(null);
     setError(null);
   }, []);
 
-  const updateInvoiceData = useCallback((updater: (prev: InvoiceData) => InvoiceData) => {
-    setInvoiceData(prev => prev ? updater(prev) : null);
-  }, []);
+  const updateInvoiceData = useCallback(
+    (updater: (prev: InvoiceData) => InvoiceData) => {
+      setInvoiceData((prev) => (prev ? updater(prev) : null));
+    },
+    [],
+  );
 
   return {
     invoiceData,
@@ -95,6 +76,6 @@ export function useInvoice() {
     fetchRecentInvoices,
     fetchForPdf,
     clearInvoice,
-    updateInvoiceData
+    updateInvoiceData,
   };
 }

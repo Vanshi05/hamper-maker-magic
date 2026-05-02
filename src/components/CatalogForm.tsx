@@ -4,8 +4,21 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, Plus, Trash2, ChevronDown, ChevronUp, ImageIcon, Search, Loader2 } from "lucide-react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Upload,
+  Plus,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  ImageIcon,
+  Search,
+  Loader2,
+} from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Select,
   SelectContent,
@@ -14,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { AirtableService } from "@/lib/airtable";
 
 export interface CatalogPageData {
   id: string;
@@ -37,28 +51,42 @@ interface CatalogFormProps {
 
 const MAX_BULK_GHIDS = 10;
 
-export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePageChange }: CatalogFormProps) {
-  const [openPages, setOpenPages] = useState<Record<string, boolean>>({ [pages[0]?.id]: true });
-  const [itemsDraftByPageId, setItemsDraftByPageId] = useState<Record<string, string>>({});
-  const [itemCountByPageId, setItemCountByPageId] = useState<Record<string, string>>({});
-  
+export function CatalogForm({
+  pages,
+  activePageIndex,
+  onPagesChange,
+  onActivePageChange,
+}: CatalogFormProps) {
+  const [openPages, setOpenPages] = useState<Record<string, boolean>>({
+    [pages[0]?.id]: true,
+  });
+  const [itemsDraftByPageId, setItemsDraftByPageId] = useState<
+    Record<string, string>
+  >({});
+  const [itemCountByPageId, setItemCountByPageId] = useState<
+    Record<string, string>
+  >({});
+
   // GHID fetch states
   const [ghidInput, setGhidInput] = useState<Record<string, string>>({});
   const [fetchingGhid, setFetchingGhid] = useState<Record<string, boolean>>({});
-  
+
   // Bulk GHID states
   const [bulkGhids, setBulkGhids] = useState("");
   const [isBulkFetching, setIsBulkFetching] = useState(false);
 
   const activePage = pages[activePageIndex];
 
-  const handleImageUpload = (pageId: string, e: ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (
+    pageId: string,
+    e: ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = (event) => {
-        const newPages = pages.map(p => 
-          p.id === pageId ? { ...p, image: event.target?.result as string } : p
+        const newPages = pages.map((p) =>
+          p.id === pageId ? { ...p, image: event.target?.result as string } : p,
         );
         onPagesChange(newPages);
       };
@@ -67,8 +95,8 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
   };
 
   const updatePage = (pageId: string, updates: Partial<CatalogPageData>) => {
-    const newPages = pages.map(p => 
-      p.id === pageId ? { ...p, ...updates } : p
+    const newPages = pages.map((p) =>
+      p.id === pageId ? { ...p, ...updates } : p,
     );
     onPagesChange(newPages);
   };
@@ -103,7 +131,7 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
   // GHID Fetch Function
   const handleFetchGhid = async (pageId: string) => {
     const ghId = ghidInput[pageId]?.trim();
-    
+
     if (!ghId) {
       toast.error("Please enter a GHID");
       return;
@@ -112,23 +140,14 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
     setFetchingGhid((prev) => ({ ...prev, [pageId]: true }));
 
     try {
-      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-      const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/hamper?gh_id=${encodeURIComponent(ghId)}`, {
-        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
-      });
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        toast.error(result?.error || "Failed to fetch gift hamper");
-        return;
-      }
-
-      const data = result.data;
+      const data = await AirtableService.fetchHamperDetails(ghId);
 
       // Parse items from gh_bom (assuming it's comma-separated or similar format)
-      const bomItems = data.gh_bom 
-        ? data.gh_bom.split(',').map((item: string) => item.trim()).filter(Boolean)
+      const bomItems = data.gh_bom
+        ? data.gh_bom
+            .split(",")
+            .map((item: string) => item.trim())
+            .filter(Boolean)
         : [];
 
       // Update the page with fetched data
@@ -142,14 +161,14 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
       });
 
       // Update items draft and count
-      setItemsDraftByPageId((prev) => ({ 
-        ...prev, 
-        [pageId]: bomItems.join(", ") 
+      setItemsDraftByPageId((prev) => ({
+        ...prev,
+        [pageId]: bomItems.join(", "),
       }));
-      
-      setItemCountByPageId((prev) => ({ 
-        ...prev, 
-        [pageId]: String(bomItems.length) 
+
+      setItemCountByPageId((prev) => ({
+        ...prev,
+        [pageId]: String(bomItems.length),
       }));
 
       toast.success(`Gift hamper "${data.name}" loaded successfully!`);
@@ -165,9 +184,9 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
   const handleBulkFetchGhids = async () => {
     const ghidList = bulkGhids
       .split(/[,\n]+/)
-      .map(g => g.trim())
+      .map((g) => g.trim())
       .filter(Boolean);
-    
+
     if (ghidList.length === 0) {
       toast.error("Please enter at least one GHID");
       return;
@@ -179,33 +198,24 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
     }
 
     setIsBulkFetching(true);
-    
+
     const newPages: CatalogPageData[] = [];
     const newOpenPages: Record<string, boolean> = {};
     const newItemsDraft: Record<string, string> = {};
     const newItemCount: Record<string, string> = {};
     const newGhidInput: Record<string, string> = {};
-    
+
     let successCount = 0;
     let failedGhids: string[] = [];
 
     for (const ghId of ghidList) {
       try {
-        const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-        const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-        const response = await fetch(`${SUPABASE_URL}/functions/v1/hamper?gh_id=${encodeURIComponent(ghId)}`, {
-          headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
-        });
-        const result = await response.json();
-
-        if (!response.ok || !result.success) {
-          failedGhids.push(ghId);
-          continue;
-        }
-
-        const data = result.data;
-        const bomItems = data.gh_bom 
-          ? data.gh_bom.split(',').map((item: string) => item.trim()).filter(Boolean)
+        const data = await AirtableService.fetchHamperDetails(ghId);
+        const bomItems = data.gh_bom
+          ? data.gh_bom
+              .split(",")
+              .map((item: string) => item.trim())
+              .filter(Boolean)
           : [];
 
         const pageId = crypto.randomUUID();
@@ -285,7 +295,11 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
       plasticPercent: "",
       carbonPercent: "",
     };
-    const newPages = [...pages.slice(0, atPosition), newPage, ...pages.slice(atPosition)];
+    const newPages = [
+      ...pages.slice(0, atPosition),
+      newPage,
+      ...pages.slice(atPosition),
+    ];
     onPagesChange(newPages);
     setOpenPages({ ...openPages, [newPage.id]: true });
     onActivePageChange(atPosition);
@@ -296,8 +310,8 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
 
   const removePage = (pageId: string) => {
     if (pages.length <= 1) return;
-    const pageIndex = pages.findIndex(p => p.id === pageId);
-    const newPages = pages.filter(p => p.id !== pageId);
+    const pageIndex = pages.findIndex((p) => p.id === pageId);
+    const newPages = pages.filter((p) => p.id !== pageId);
     onPagesChange(newPages);
 
     setItemsDraftByPageId((prev) => {
@@ -345,7 +359,8 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
           />
           <div className="flex items-center justify-between">
             <p className="text-[10px] text-muted-foreground">
-              {bulkGhids.split(/[,\n]+/).filter(g => g.trim()).length} GHID(s) entered
+              {bulkGhids.split(/[,\n]+/).filter((g) => g.trim()).length} GHID(s)
+              entered
             </p>
             <Button
               type="button"
@@ -384,7 +399,7 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
             Add Template Page
           </Button>
         </div>
-        
+
         {/* Insert Full Image Page */}
         <div className="flex items-center gap-2 w-full">
           <Select value={insertPosition} onValueChange={setInsertPosition}>
@@ -394,7 +409,11 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
             <SelectContent>
               {Array.from({ length: pages.length + 1 }, (_, i) => (
                 <SelectItem key={i} value={String(i + 1)}>
-                  {i === 0 ? "At start (Page 1)" : i === pages.length ? `At end (Page ${i + 1})` : `After Page ${i} (becomes Page ${i + 1})`}
+                  {i === 0
+                    ? "At start (Page 1)"
+                    : i === pages.length
+                      ? `At end (Page ${i + 1})`
+                      : `After Page ${i} (becomes Page ${i + 1})`}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -403,7 +422,9 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => insertPosition && insertFullImagePage(Number(insertPosition) - 1)}
+            onClick={() =>
+              insertPosition && insertFullImagePage(Number(insertPosition) - 1)
+            }
             disabled={!insertPosition}
             className="h-8 text-xs"
           >
@@ -419,31 +440,41 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
             open={openPages[page.id]}
             onOpenChange={() => togglePage(page.id)}
           >
-            <div 
+            <div
               className={`border rounded-lg overflow-hidden transition-all ${
-                activePageIndex === index 
-                  ? 'border-primary ring-2 ring-primary/20' 
-                  : 'border-border/50 hover:border-primary/30'
+                activePageIndex === index
+                  ? "border-primary ring-2 ring-primary/20"
+                  : "border-border/50 hover:border-primary/30"
               }`}
               onClick={() => onActivePageChange(index)}
             >
               <CollapsibleTrigger asChild>
                 <div className="flex items-center justify-between p-3 bg-secondary/30 cursor-pointer hover:bg-secondary/50">
                   <div className="flex items-center gap-3">
-                    <span className={`w-6 h-6 rounded-full text-primary-foreground text-xs flex items-center justify-center font-medium ${
-                      page.type === "full-image" ? "bg-accent" : "bg-primary"
-                    }`}>
-                      {page.type === "full-image" ? <ImageIcon className="h-3 w-3" /> : index + 1}
+                    <span
+                      className={`w-6 h-6 rounded-full text-primary-foreground text-xs flex items-center justify-center font-medium ${
+                        page.type === "full-image" ? "bg-accent" : "bg-primary"
+                      }`}
+                    >
+                      {page.type === "full-image" ? (
+                        <ImageIcon className="h-3 w-3" />
+                      ) : (
+                        index + 1
+                      )}
                     </span>
                     <div className="flex flex-col">
                       <span className="text-sm font-medium truncate max-w-[160px]">
                         {page.title || `Page ${index + 1}`}
                       </span>
                       {page.type === "full-image" && (
-                        <span className="text-[10px] text-accent">Full Image Page</span>
+                        <span className="text-[10px] text-accent">
+                          Full Image Page
+                        </span>
                       )}
                       {page.ghId && (
-                        <span className="text-[10px] text-muted-foreground">GHID: {page.ghId}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          GHID: {page.ghId}
+                        </span>
                       )}
                     </div>
                     {page.image && (
@@ -473,15 +504,18 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
                   </div>
                 </div>
               </CollapsibleTrigger>
-              
+
               <CollapsibleContent>
                 <div className="p-4 space-y-4 bg-card">
                   {page.type === "full-image" ? (
                     /* Full Image Page - Only image upload */
                     <div className="space-y-2">
-                      <Label className="text-xs font-medium">Full Page Image</Label>
+                      <Label className="text-xs font-medium">
+                        Full Page Image
+                      </Label>
                       <p className="text-[10px] text-muted-foreground">
-                        This image will cover the entire page (1200×630px recommended)
+                        This image will cover the entire page (1200×630px
+                        recommended)
                       </p>
                       <div className="relative">
                         <input
@@ -498,12 +532,16 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
                                 alt="Preview"
                                 className="w-24 h-14 object-cover rounded-lg shadow-md"
                               />
-                              <p className="text-xs text-muted-foreground">Click to change</p>
+                              <p className="text-xs text-muted-foreground">
+                                Click to change
+                              </p>
                             </div>
                           ) : (
                             <div className="flex items-center gap-2 justify-center py-4">
                               <ImageIcon className="h-6 w-6 text-accent/50" />
-                              <p className="text-xs text-muted-foreground">Upload full page image</p>
+                              <p className="text-xs text-muted-foreground">
+                                Upload full page image
+                              </p>
                             </div>
                           )}
                         </div>
@@ -514,17 +552,21 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
                     <>
                       {/* GHID Fetch Section */}
                       <div className="space-y-2 p-3 bg-primary/5 rounded-lg border border-primary/20">
-                        <Label className="text-xs font-medium text-primary">Quick Fill from Airtable</Label>
+                        <Label className="text-xs font-medium text-primary">
+                          Quick Fill from Airtable
+                        </Label>
                         <div className="flex gap-2">
                           <Input
                             placeholder="Enter GHID"
                             value={ghidInput[page.id] || ""}
-                            onChange={(e) => setGhidInput((prev) => ({ 
-                              ...prev, 
-                              [page.id]: e.target.value 
-                            }))}
+                            onChange={(e) =>
+                              setGhidInput((prev) => ({
+                                ...prev,
+                                [page.id]: e.target.value,
+                              }))
+                            }
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
+                              if (e.key === "Enter") {
                                 e.preventDefault();
                                 handleFetchGhid(page.id);
                               }
@@ -535,7 +577,10 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
                           <Button
                             type="button"
                             onClick={() => handleFetchGhid(page.id)}
-                            disabled={fetchingGhid[page.id] || !ghidInput[page.id]?.trim()}
+                            disabled={
+                              fetchingGhid[page.id] ||
+                              !ghidInput[page.id]?.trim()
+                            }
                             className="h-9 px-3"
                             size="sm"
                           >
@@ -553,13 +598,16 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
                           </Button>
                         </div>
                         <p className="text-[10px] text-muted-foreground">
-                          Enter a GHID to auto-fill title, image, and items from your Airtable
+                          Enter a GHID to auto-fill title, image, and items from
+                          your Airtable
                         </p>
                       </div>
 
                       {/* Image Upload */}
                       <div className="space-y-2">
-                        <Label className="text-xs font-medium">Hamper Photo</Label>
+                        <Label className="text-xs font-medium">
+                          Hamper Photo
+                        </Label>
                         <div className="relative">
                           <input
                             type="file"
@@ -575,12 +623,16 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
                                   alt="Preview"
                                   className="w-16 h-16 object-cover rounded-lg shadow-md"
                                 />
-                                <p className="text-xs text-muted-foreground">Click to change</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Click to change
+                                </p>
                               </div>
                             ) : (
                               <div className="flex items-center gap-2 justify-center py-2">
                                 <Upload className="h-5 w-5 text-primary/50" />
-                                <p className="text-xs text-muted-foreground">Upload photo</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Upload photo
+                                </p>
                               </div>
                             )}
                           </div>
@@ -593,18 +645,24 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
                         <Input
                           placeholder="e.g., Diwali Delights Gift Hamper"
                           value={page.title}
-                          onChange={(e) => updatePage(page.id, { title: e.target.value })}
+                          onChange={(e) =>
+                            updatePage(page.id, { title: e.target.value })
+                          }
                           className="h-9 text-sm"
                         />
                       </div>
 
                       {/* Description */}
                       <div className="space-y-1">
-                        <Label className="text-xs font-medium">Description</Label>
+                        <Label className="text-xs font-medium">
+                          Description
+                        </Label>
                         <Textarea
                           placeholder="Write a description..."
                           value={page.description}
-                          onChange={(e) => updatePage(page.id, { description: e.target.value })}
+                          onChange={(e) =>
+                            updatePage(page.id, { description: e.target.value })
+                          }
                           rows={3}
                           className="text-sm resize-none"
                         />
@@ -614,7 +672,9 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
                       <div className="space-y-2">
                         <div className="flex items-end justify-between gap-3">
                           <div className="space-y-1">
-                            <Label className="text-xs font-medium">Number of items</Label>
+                            <Label className="text-xs font-medium">
+                              Number of items
+                            </Label>
                             <Input
                               type="number"
                               min="1"
@@ -622,12 +682,22 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
                               value={itemCountByPageId[page.id] ?? ""}
                               onChange={(e) => {
                                 const next = e.target.value;
-                                setItemCountByPageId((prev) => ({ ...prev, [page.id]: next }));
+                                setItemCountByPageId((prev) => ({
+                                  ...prev,
+                                  [page.id]: next,
+                                }));
 
-                                const raw = itemsDraftByPageId[page.id] ?? getItemsText(page.items);
-                                const expected = getExpectedItemCount(page.id, next);
+                                const raw =
+                                  itemsDraftByPageId[page.id] ??
+                                  getItemsText(page.items);
+                                const expected = getExpectedItemCount(
+                                  page.id,
+                                  next,
+                                );
                                 const items = parseItems(raw, expected);
-                                updatePage(page.id, { items: items.length > 0 ? items : [""] });
+                                updatePage(page.id, {
+                                  items: items.length > 0 ? items : [""],
+                                });
                               }}
                               className="h-9 text-sm w-32"
                             />
@@ -638,11 +708,18 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
                           </p>
                         </div>
 
-                        <Label className="text-xs font-medium">Items (comma separated)</Label>
+                        <Label className="text-xs font-medium">
+                          Items (comma separated)
+                        </Label>
                         <Textarea
                           placeholder="Item 1, Item 2, Item 3, ..."
-                          value={itemsDraftByPageId[page.id] ?? getItemsText(page.items)}
-                          onChange={(e) => handleItemsChange(page.id, e.target.value)}
+                          value={
+                            itemsDraftByPageId[page.id] ??
+                            getItemsText(page.items)
+                          }
+                          onChange={(e) =>
+                            handleItemsChange(page.id, e.target.value)
+                          }
                           rows={3}
                           className="text-sm resize-none"
                         />
@@ -650,29 +727,43 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
 
                       {/* Eco Stats */}
                       <div className="space-y-2">
-                        <Label className="text-xs font-medium text-eco">Eco Stats</Label>
+                        <Label className="text-xs font-medium text-eco">
+                          Eco Stats
+                        </Label>
                         <div className="grid grid-cols-2 gap-2">
                           <div className="space-y-1">
-                            <Label className="text-[10px] text-muted-foreground">Plastic %</Label>
+                            <Label className="text-[10px] text-muted-foreground">
+                              Plastic %
+                            </Label>
                             <Input
                               type="number"
                               min="0"
                               max="100"
                               placeholder="76"
                               value={page.plasticPercent}
-                              onChange={(e) => updatePage(page.id, { plasticPercent: e.target.value })}
+                              onChange={(e) =>
+                                updatePage(page.id, {
+                                  plasticPercent: e.target.value,
+                                })
+                              }
                               className="h-8 text-sm"
                             />
                           </div>
                           <div className="space-y-1">
-                            <Label className="text-[10px] text-muted-foreground">Carbon %</Label>
+                            <Label className="text-[10px] text-muted-foreground">
+                              Carbon %
+                            </Label>
                             <Input
                               type="number"
                               min="0"
                               max="100"
                               placeholder="60"
                               value={page.carbonPercent}
-                              onChange={(e) => updatePage(page.id, { carbonPercent: e.target.value })}
+                              onChange={(e) =>
+                                updatePage(page.id, {
+                                  carbonPercent: e.target.value,
+                                })
+                              }
                               className="h-8 text-sm"
                             />
                           </div>
@@ -680,13 +771,17 @@ export function CatalogForm({ pages, activePageIndex, onPagesChange, onActivePag
                       </div>
 
                       {/* Price Info (if fetched) */}
-                      {page.preTaxPrice !== undefined && page.preTaxPrice > 0 && (
-                        <div className="p-2 bg-secondary/30 rounded-lg">
-                          <p className="text-xs text-muted-foreground">
-                            Pre-tax Price: <span className="font-medium text-foreground">₹{page.preTaxPrice}</span>
-                          </p>
-                        </div>
-                      )}
+                      {page.preTaxPrice !== undefined &&
+                        page.preTaxPrice > 0 && (
+                          <div className="p-2 bg-secondary/30 rounded-lg">
+                            <p className="text-xs text-muted-foreground">
+                              Pre-tax Price:{" "}
+                              <span className="font-medium text-foreground">
+                                ₹{page.preTaxPrice}
+                              </span>
+                            </p>
+                          </div>
+                        )}
                     </>
                   )}
                 </div>

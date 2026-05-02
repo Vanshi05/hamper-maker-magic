@@ -1,7 +1,6 @@
 import type { QuestionnaireData, GeneratedHamper, HamperItem, Feasibility, BadgeType, InventoryStatus } from "./types";
 import { PACKAGING_OPTIONS } from "./types";
-import { supabase } from "@/integrations/supabase/client";
-
+import { AirtableService } from "@/lib/airtable";
 
 // ── Airtable Product shape ──────────────────────────────────────────
 export interface AirtableProduct {
@@ -27,49 +26,14 @@ function getProductType(p: AirtableProduct): string {
   return p.product_type || "";
 }
 
-// ── Fetch products from edge function (resilient) ───────────────────
+// ── Fetch products (Direct Airtable) ────────────────────────────────
 export async function fetchProducts(): Promise<AirtableProduct[]> {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-  // Path 1: direct edge-function fetch when env vars are available
-  if (supabaseUrl && supabaseKey) {
-    try {
-      const response = await fetch(`${supabaseUrl}/functions/v1/products`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Edge function error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      if (!data?.success) {
-        throw new Error(data?.error || "Failed to fetch products");
-      }
-      return data.data as AirtableProduct[];
-    } catch (err) {
-      console.warn("[fetchProducts] direct fetch failed, falling back to supabase client:", err);
-      // fall through to client-based path
-    }
+  try {
+    return await AirtableService.fetchProducts();
+  } catch (err) {
+    console.error("[fetchProducts] direct fetch failed:", err);
+    throw err;
   }
-
-  // Path 2: fallback via integrated supabase client
-  const { data, error } = await supabase.functions.invoke("products", {
-    body: {},
-  });
-
-  if (error) {
-    throw new Error(`Failed to fetch products: ${error.message}`);
-  }
-  if (!data?.success) {
-    throw new Error(data?.error || "Failed to fetch products");
-  }
-  return data.data as AirtableProduct[];
 }
 
 // ── Extract dynamic options from products ───────────────────────────
