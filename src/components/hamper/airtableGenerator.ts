@@ -2,7 +2,6 @@ import type { QuestionnaireData, GeneratedHamper, HamperItem, Feasibility, Badge
 import { PACKAGING_OPTIONS } from "./types";
 import { AirtableService } from "@/lib/airtable";
 
-// ── Airtable Product shape ──────────────────────────────────────────
 export interface AirtableProduct {
   p_id: string;
   fancy_name: string;
