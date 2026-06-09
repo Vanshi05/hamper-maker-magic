@@ -2,7 +2,6 @@ import { Document, Page, Text, View, Image, StyleSheet, Font } from '@react-pdf/
 import { InvoiceData } from '@/types/invoice';
 import loopifyLogo from '@/assets/loopify-logo.jpeg';
 
-// Register fonts for professional look
 Font.register({
   family: 'Helvetica',
   fonts: [
@@ -33,7 +32,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 15,
-    letterSpacing: 1, //letter spacing was 2
+    letterSpacing: 1,
     color: '#1f2937',
   },
   separator: {
@@ -61,9 +60,8 @@ const styles = StyleSheet.create({
   },
   textBlock: {
     color: '#374151',
-    lineHeight: 0.8, // lineHeight was 1.4
+    lineHeight: 0.8,
   },
-  // Table styles
   table: {
     marginBottom: 15,
     borderWidth: 1,
@@ -106,7 +104,6 @@ const styles = StyleSheet.create({
   colPreGst: { width: '12%', textAlign: 'center' },
   colQty: { width: '8%', textAlign: 'center' },
   colAmount: { width: '10%', textAlign: 'center' },
-  // Totals
   totalsContainer: {
     alignItems: 'flex-end',
     marginBottom: 15,
@@ -140,24 +137,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
   },
-  // Terms
   termsSection: {
     marginBottom: 8,
   },
   termText: {
     color: '#374151',
-    // Tighter leading to avoid the "too spaced out" look in PDF
     fontSize: 9.5,
     lineHeight: 1.25,
   },
-  // Bank details
   bankBox: {
     backgroundColor: '#f9fafb',
     padding: 12,
     borderRadius: 4,
     marginBottom: 15,
   },
-  // Footer
   footer: {
     textAlign: 'center',
     marginTop: 15,
@@ -185,9 +178,8 @@ interface InvoicePdfTemplateProps {
   data: InvoiceData;
 }
 
-const formatCurrency = (amount: number) => {
-  return amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
+const formatCurrency = (amount: number) =>
+  amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const parseConfigItems = (config: string | string[] | undefined): string[] => {
   if (!config) return [];
@@ -201,33 +193,32 @@ const parseConfigItems = (config: string | string[] | undefined): string[] => {
 export const InvoicePdfTemplate = ({ data }: InvoicePdfTemplateProps) => {
   const { invoice, items, totals } = data;
 
-  const seller = data.seller || {
-    name: "Loopify World Private Ltd",
-    address: "103-B, Anand Commercial Compound, Gandhi Nagar, LBS Marg, Vikhroli West, Mumbai - 400083",
-    gst: "27AAECL4397C1ZF",
+  // ✅ Fixed: per-field fallback instead of whole-object ||
+  const seller = {
+    name: data.seller?.name || "Loopify World Private Ltd",
+    address: data.seller?.address || "103-B, Anand Commercial Compound, Gandhi Nagar, LBS Marg, Vikhroli West, Mumbai - 400083",
+    gst: data.seller?.gst || "27AAECL4397C1ZF",
   };
 
-  const bankDetails = data.bankDetails || {
-    bankName: "ICICI Bank Ltd",
-    accountNumber: "002005040537",
-    ifsc: "ICIC0000020",
-    branch: "Powai, Mumbai"
+  const bankDetails = {
+    bankName: data.bankDetails?.bankName || "ICICI Bank Ltd",
+    accountNumber: data.bankDetails?.accountNumber || "002005040537",
+    ifsc: data.bankDetails?.ifsc || "ICIC0000020",
+    branch: data.bankDetails?.branch || "Powai, Mumbai",
   };
 
-  const terms = data.terms || [
+  const terms = data.terms?.length ? data.terms : [
     "Prices are inclusive of all taxes, branding and shipping as mentioned above.",
     "Client to share the address, mobile numbers and email ids for dispatch.",
     "Loopify team will dispatch hampers within 10-11 days from receipt of advance for order confirmation and approval on mock-ups. While we take all efforts to neutralise it, Loopify won't be responsible in case of unforeseen delays in delivery because of on ground issues, if any.",
     "The total invoice value, inclusive of GST, must be paid as per the agreed terms. Withholding or delaying the GST component is not permitted. Loopify will hold dispatch until the full amount is received."
   ];
 
-  const paymentTerms = [
+  const paymentTerms = data.paymentTerms?.length ? data.paymentTerms : [
     "50% advance payment at the time of order confirmation.",
     "50% balance payment before dispatch"
   ];
 
-
-  // Build bank details as single block
   const bankText = `Account Name: LOOPIFY WORLD PVT LTD\nBank Name: ${bankDetails.bankName}\nBank Account number: ${bankDetails.accountNumber}\nIFSC Code: ${bankDetails.ifsc}\nBranch: ${bankDetails.branch}`;
 
   return (
@@ -296,9 +287,7 @@ export const InvoicePdfTemplate = ({ data }: InvoicePdfTemplateProps) => {
                   {configItems.length > 0 && (
                     <View style={styles.configList}>
                       {configItems.map((c, idx) => (
-                        <Text key={idx} style={styles.configLine}>
-                          • {c}
-                        </Text>
+                        <Text key={idx} style={styles.configLine}>• {c}</Text>
                       ))}
                     </View>
                   )}
@@ -335,7 +324,6 @@ export const InvoicePdfTemplate = ({ data }: InvoicePdfTemplateProps) => {
         {/* Terms */}
         <View style={styles.termsSection}>
           <Text style={styles.sectionTitle}>TERMS:</Text>
-
           {terms.map((t, i) => (
             <View key={i} style={{ flexDirection: 'row', marginBottom: 2 }}>
               <Text style={styles.termText}>• </Text>
@@ -347,7 +335,6 @@ export const InvoicePdfTemplate = ({ data }: InvoicePdfTemplateProps) => {
         {/* Payment Terms */}
         <View style={styles.termsSection}>
           <Text style={styles.sectionTitle}>PAYMENT TERMS:</Text>
-
           {paymentTerms.map((t, i) => (
             <View key={i} style={{ flexDirection: 'row', marginBottom: 2 }}>
               <Text style={styles.termText}>• </Text>

@@ -33,7 +33,6 @@ function recalcTotals(items: InvoiceLineItem[]) {
   };
 }
 
-// Plain text display components for read-only mode
 const ROText = ({ value, className = '' }: { value: string | number | undefined; className?: string }) => (
   <span className={`text-sm text-gray-800 ${className}`}>{value ?? ''}</span>
 );
@@ -46,29 +45,29 @@ export const InvoicePreview = forwardRef<HTMLDivElement, InvoicePreviewProps>(
   ({ data, onUpdate, readOnly = false }, ref) => {
     const { invoice, items, seller, bankDetails, terms } = data;
 
-    const defaultSeller = seller || {
-      name: "Loopify World Private Ltd",
-      address: "103-B, Anand Commercial Compound, Gandhi Nagar, LBS Marg, Vikhroli West, Mumbai - 400083",
-      gst: "27AAECL4397C1ZF",
-      phone: "+91 XXXXXXXXXX",
-      email: "contact@loopify.world"
+    const defaultSeller = {
+      name: seller?.name || "Loopify World Private Ltd",
+      address: seller?.address || "103-B, Anand Commercial Compound, Gandhi Nagar, LBS Marg, Vikhroli West, Mumbai - 400083",
+      gst: seller?.gst || "27AAECL4397C1ZF",
+      phone: seller?.phone || "+91 XXXXXXXXXX",
+      email: seller?.email || "contact@loopify.world"
     };
 
-    const defaultBankDetails = bankDetails || {
-      bankName: "ICICI Bank Ltd",
-      accountNumber: "002005040537",
-      ifsc: "ICIC0000020",
-      branch: "Powai, Mumbai"
+    const defaultBankDetails = {
+      bankName: bankDetails?.bankName || "ICICI Bank Ltd",
+      accountNumber: bankDetails?.accountNumber || "002005040537",
+      ifsc: bankDetails?.ifsc || "ICIC0000020",
+      branch: bankDetails?.branch || "Powai, Mumbai"
     };
 
-    const defaultTerms = terms || [
+    const defaultTerms = terms?.length ? terms : [
       "Prices are inclusive of all taxes, branding and shipping as mentioned above.",
       "Client to share the address, mobile numbers and email ids for dispatch.",
       "Loopify team will dispatch hampers within 10-11 days from receipt of advance for order confirmation and approval on mock-ups. While we take all efforts to neutralise it, Loopify won't be responsible in case of unforeseen delays in delivery because of on ground issues, if any.",
       "The total invoice value, inclusive of GST, must be paid as per the agreed terms. Withholding or delaying the GST component is not permitted. Loopify will hold dispatch until the full amount is received."
     ];
 
-    const paymentTerms = data.paymentTerms || [
+    const paymentTerms = data.paymentTerms?.length ? data.paymentTerms : [
       "50% advance payment at the time of order confirmation.",
       "50% balance payment before dispatch"
     ];
@@ -126,16 +125,13 @@ export const InvoicePreview = forwardRef<HTMLDivElement, InvoicePreviewProps>(
       if (!config) return [];
       const configStr = typeof config === 'string' ? config : config.join('\n');
       if (!configStr.trim()) return [];
-      // Try numbered format: (1) Item Name
       const matches = configStr.match(/\(\d+\)\s*[^|()]+/g);
       if (matches && matches.length > 0) return matches.map(m => m.trim());
-      // Fallback: split by newlines and show each non-empty line
       return configStr.split(/\n/).map(l => l.trim()).filter(Boolean);
     };
 
     return (
       <Card ref={ref} className="p-8 bg-white text-black print:shadow-none" id="invoice-preview">
-        {/* Editable hint */}
         {!readOnly && (
           <div className="mb-4 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700 print:hidden">
             ✏️ All fields are editable. Click any text to modify. Changes recalculate totals automatically.
@@ -170,7 +166,7 @@ export const InvoicePreview = forwardRef<HTMLDivElement, InvoicePreviewProps>(
               )}
             </div>
           </div>
-          <img src={loopifyLogo} alt="Loopify Logo" className="h-16 object-contain"  />
+          <img src={loopifyLogo} alt="Loopify Logo" className="h-16 object-contain" />
         </div>
 
         {/* Title */}
